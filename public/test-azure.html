@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure Speech Test - Direct</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px 5px;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-weight: 500;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .output {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .transcript {
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 5px;
+            border-left: 3px solid #667eea;
+        }
+        
+        .transcript.partial {
+            border-left-color: #ffc107;
+            opacity: 0.8;
+        }
+        
+        .transcript.final {
+            border-left-color: #28a745;
+        }
+        
+        .timestamp {
+            font-size: 11px;
+            color: #999;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Azure Speech Test - Direct API</h1>
+        
+        <div id="status" class="status info">
+            Initializing Azure Speech SDK...
+        </div>
+        
+        <div>
+            <button id="startBtn" class="btn btn-primary" disabled>Start Microphone</button>
+            <button id="stopBtn" class="btn btn-danger" disabled>Stop</button>
+        </div>
+        
+        <div class="output">
+            <h3>Recognition Output:</h3>
+            <div id="output"></div>
+        </div>
+    </div>
+
+    <!-- Load Azure Speech SDK -->
+    <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
+    
+    <script>
+        let recognizer = null;
+        let speechConfig = null;
+        const statusEl = document.getElementById('status');
+        const outputEl = document.getElementById('output');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        
+        // Initialize SDK
+        async function initializeSDK() {
+            try {
+                // Wait for SDK to load
+                if (typeof window.SpeechSDK === 'undefined') {
+                    statusEl.className = 'status error';
+                    statusEl.textContent = 'Speech SDK not loaded. Waiting...';
+                    
+                    // Wait a bit and try again
+                    setTimeout(initializeSDK, 1000);
+                    return;
+                }
+                
+                statusEl.className = 'status info';
+                statusEl.textContent = 'SDK loaded. Fetching token...';
+                
+                // Fetch token from server
+                const response = await fetch('/api/speech/token');
+                const data = await response.json();
+                
+                // Create speech config from token
+                speechConfig = window.SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                    data.token,
+                    data.region
+                );
+                
+                // Set recognition language
+                speechConfig.speechRecognitionLanguage = 'en-US';
+                
+                statusEl.className = 'status success';
+                statusEl.textContent = '✅ Ready! Click "Start Microphone" to begin.';
+                startBtn.disabled = false;
+                
+            } catch (error) {
+                console.error('Initialization error:', error);
+                statusEl.className = 'status error';
+                statusEl.textContent = `❌ Error: ${error.message}`;
+            }
+        }
+        
+        // Start recognition
+        startBtn.addEventListener('click', async () => {
+            try {
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                
+                statusEl.className = 'status info';
+                statusEl.textContent = '🎤 Requesting microphone access...';
+                
+                // Create audio config from microphone
+                const audioConfig = window.SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+                
+                // Create recognizer
+                recognizer = new window.SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+                
+                // Handle partial results
+                recognizer.recognizing = (s, e) => {
+                    addTranscript(e.result.text, 'partial');
+                };
+                
+                // Handle final results
+                recognizer.recognized = (s, e) => {
+                    if (e.result.reason === window.SpeechSDK.ResultReason.RecognizedSpeech) {
+                        addTranscript(e.result.text, 'final');
+                    } else if (e.result.reason === window.SpeechSDK.ResultReason.NoMatch) {
+                        console.log('No speech detected');
+                    }
+                };
+                
+                // Handle errors
+                recognizer.canceled = (s, e) => {
+                    console.error('Recognition canceled:', e.errorDetails);
+                    statusEl.className = 'status error';
+                    statusEl.textContent = `❌ Error: ${e.errorDetails}`;
+                    stopRecognition();
+                };
+                
+                // Start continuous recognition
+                recognizer.startContinuousRecognitionAsync(
+                    () => {
+                        statusEl.className = 'status success';
+                        statusEl.textContent = '🎤 Listening... Speak into your microphone.';
+                    },
+                    (err) => {
+                        console.error('Failed to start:', err);
+                        statusEl.className = 'status error';
+                        statusEl.textContent = `❌ Failed to start: ${err}`;
+                        stopRecognition();
+                    }
+                );
+                
+            } catch (error) {
+                console.error('Start error:', error);
+                statusEl.className = 'status error';
+                statusEl.textContent = `❌ Error: ${error.message}`;
+                stopRecognition();
+            }
+        });
+        
+        // Stop recognition
+        stopBtn.addEventListener('click', () => {
+            stopRecognition();
+        });
+        
+        function stopRecognition() {
+            if (recognizer) {
+                recognizer.stopContinuousRecognitionAsync(
+                    () => {
+                        console.log('Recognition stopped');
+                        recognizer.close();
+                        recognizer = null;
+                    },
+                    (err) => console.error('Stop error:', err)
+                );
+            }
+            
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            statusEl.className = 'status info';
+            statusEl.textContent = 'Ready. Click "Start Microphone" to begin.';
+        }
+        
+        function addTranscript(text, type) {
+            const transcript = document.createElement('div');
+            transcript.className = `transcript ${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            transcript.innerHTML = `
+                <span class="timestamp">${timestamp}</span>
+                <strong>${type.toUpperCase()}:</strong> ${text}
+            `;
+            
+            outputEl.appendChild(transcript);
+            outputEl.scrollTop = outputEl.scrollHeight;
+            
+            // Keep only last 50 transcripts
+            while (outputEl.children.length > 50) {
+                outputEl.removeChild(outputEl.firstChild);
+            }
+        }
+        
+        // Initialize on load
+        window.addEventListener('load', () => {
+            setTimeout(initializeSDK, 500);
+        });
+    </script>
+</body>
+</html>

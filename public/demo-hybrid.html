@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hybrid Translation Demo - No Microphone Required</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .panel {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 30px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+        
+        .mode-badge {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 11px;
+            font-weight: bold;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .display-area {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            min-height: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            border-left: 3px solid #667eea;
+        }
+        
+        .message.partial {
+            border-left-color: #ffc107;
+            opacity: 0.8;
+        }
+        
+        .message.final {
+            border-left-color: #28a745;
+        }
+        
+        .message.audio {
+            border-left-color: #2196f3;
+            background: linear-gradient(90deg, #e3f2fd 0%, #ffffff 100%);
+            animation: pulse 0.5s ease-in-out;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+        
+        .timestamp {
+            font-size: 11px;
+            color: #999;
+            margin-right: 10px;
+        }
+        
+        .confidence {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        
+        .confidence.high { background: #28a745; color: white; }
+        .confidence.medium { background: #ffc107; color: #333; }
+        .confidence.low { background: #dc3545; color: white; }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .metric {
+            text-align: center;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .metric-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .metric-label {
+            font-size: 11px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .simulation-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Speaker Panel -->
+        <div class="panel">
+            <h1>🎙️ Speaker Simulator <span class="mode-badge">NO MIC NEEDED</span></h1>
+            
+            <div class="controls">
+                <div class="form-group">
+                    <label>Session Code (4 characters)</label>
+                    <input type="text" id="sessionCode" value="DEMO" maxlength="4" style="text-transform: uppercase;">
+                </div>
+                
+                <div class="form-group">
+                    <label>Source Language</label>
+                    <select id="sourceLang">
+                        <option value="en-US">English</option>
+                        <option value="es-ES">Spanish</option>
+                        <option value="fr-FR">French</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Target Languages</label>
+                    <select id="targetLang">
+                        <option value="es">Spanish</option>
+                        <option value="fr">French</option>
+                        <option value="de">German</option>
+                        <option value="zh">Chinese</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Text to Simulate</label>
+                    <textarea id="textInput" placeholder="Type or paste text here...">Hello everyone. Welcome to the meeting. Let's discuss our goals.</textarea>
+                </div>
+                
+                <button id="connectBtn" class="btn btn-primary">Connect as Speaker</button>
+                <button id="disconnectBtn" class="btn btn-danger" disabled>Disconnect</button>
+                
+                <div class="simulation-buttons">
+                    <button id="simulateBtn" class="btn btn-success" disabled>Simulate Speech</button>
+                    <button id="continuousBtn" class="btn btn-success" disabled>Continuous Mode</button>
+                </div>
+            </div>
+            
+            <div id="speakerStatus" class="status disconnected">Not Connected</div>
+            
+            <h3>Output Stream</h3>
+            <div id="speakerDisplay" class="display-area">
+                <div style="color: #999; text-align: center;">Connect to start...</div>
+            </div>
+        </div>
+        
+        <!-- Listener Panel -->
+        <div class="panel">
+            <h1>🎧 Listener (Hybrid Mode)</h1>
+            
+            <div class="controls">
+                <div class="form-group">
+                    <label>Join Session Code</label>
+                    <input type="text" id="listenerCode" value="DEMO" maxlength="4" style="text-transform: uppercase;">
+                </div>
+                
+                <div class="form-group">
+                    <label>Preferred Language</label>
+                    <select id="listenerLang">
+                        <option value="es">Spanish</option>
+                        <option value="fr">French</option>
+                        <option value="de">German</option>
+                        <option value="zh">Chinese</option>
+                    </select>
+                </div>
+                
+                <button id="joinBtn" class="btn btn-primary">Join as Listener</button>
+                <button id="leaveBtn" class="btn btn-danger" disabled>Leave</button>
+            </div>
+            
+            <div id="listenerStatus" class="status disconnected">Not Connected</div>
+            
+            <h3>Translation Stream</h3>
+            <div id="listenerDisplay" class="display-area">
+                <div style="color: #999; text-align: center;">Join session to receive translations...</div>
+            </div>
+            
+            <div class="metrics">
+                <div class="metric">
+                    <div class="metric-value" id="partialCount">0</div>
+                    <div class="metric-label">Partials</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value" id="audioCount">0</div>
+                    <div class="metric-label">Audio</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value" id="latency">0ms</div>
+                    <div class="metric-label">Latency</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value" id="confidence">0%</div>
+                    <div class="metric-label">Avg Conf</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Speaker side
+        let speakerSocket = null;
+        let sessionCode = '';
+        let partialCount = 0;
+        
+        document.getElementById('connectBtn').addEventListener('click', () => {
+            sessionCode = document.getElementById('sessionCode').value.toUpperCase();
+            const sourceLang = document.getElementById('sourceLang').value;
+            const targetLang = document.getElementById('targetLang').value;
+            
+            speakerSocket = io();
+            
+            speakerSocket.on('connect', () => {
+                speakerSocket.emit('streaming-speaker-join', {
+                    sessionCode,
+                    sourceLang,
+                    targetLangs: [targetLang]
+                });
+            });
+            
+            speakerSocket.on('joined', (data) => {
+                if (data.ok) {
+                    document.getElementById('speakerStatus').className = 'status connected';
+                    document.getElementById('speakerStatus').textContent = `Connected to session ${sessionCode}`;
+                    document.getElementById('connectBtn').disabled = true;
+                    document.getElementById('disconnectBtn').disabled = false;
+                    document.getElementById('simulateBtn').disabled = false;
+                    document.getElementById('continuousBtn').disabled = false;
+                    
+                    addSpeakerMessage('Connected! Ready to simulate speech.', 'system');
+                }
+            });
+            
+            speakerSocket.on('disconnect', () => {
+                handleSpeakerDisconnect();
+            });
+        });
+        
+        document.getElementById('disconnectBtn').addEventListener('click', () => {
+            if (speakerSocket) {
+                speakerSocket.disconnect();
+                handleSpeakerDisconnect();
+            }
+        });
+        
+        function handleSpeakerDisconnect() {
+            document.getElementById('speakerStatus').className = 'status disconnected';
+            document.getElementById('speakerStatus').textContent = 'Not Connected';
+            document.getElementById('connectBtn').disabled = false;
+            document.getElementById('disconnectBtn').disabled = true;
+            document.getElementById('simulateBtn').disabled = true;
+            document.getElementById('continuousBtn').disabled = true;
+            partialCount = 0;
+        }
+        
+        // Simulate progressive speech
+        document.getElementById('simulateBtn').addEventListener('click', async () => {
+            const text = document.getElementById('textInput').value;
+            if (!text) return;
+            
+            // Simulate progressive typing/speaking
+            const words = text.split(' ');
+            let current = '';
+            
+            for (let i = 0; i < words.length; i++) {
+                current += (i > 0 ? ' ' : '') + words[i];
+                
+                // Send partial
+                speakerSocket.emit('translation-stream', {
+                    sessionCode,
+                    original: current,
+                    isFinal: false,
+                    timestamp: Date.now()
+                });
+                
+                addSpeakerMessage(`PARTIAL: "${current}"`, 'partial');
+                
+                // Wait between words
+                await delay(200 + Math.random() * 300);
+            }
+            
+            // Send final
+            await delay(500);
+            speakerSocket.emit('translation-stream', {
+                sessionCode,
+                original: text,
+                isFinal: true,
+                timestamp: Date.now()
+            });
+            
+            addSpeakerMessage(`FINAL: "${text}"`, 'final');
+        });
+        
+        // Continuous mode simulation
+        document.getElementById('continuousBtn').addEventListener('click', async () => {
+            const sentences = [
+                "Hello everyone.",
+                "Welcome to today's meeting.",
+                "Let's discuss our quarterly results.",
+                "Revenue increased by twenty percent.",
+                "We achieved all major milestones."
+            ];
+            
+            let fullText = '';
+            
+            for (const sentence of sentences) {
+                const words = sentence.split(' ');
+                
+                for (let i = 0; i < words.length; i++) {
+                    fullText += (fullText ? ' ' : '') + words[i];
+                    
+                    speakerSocket.emit('translation-stream', {
+                        sessionCode,
+                        original: fullText,
+                        isFinal: false,
+                        timestamp: Date.now()
+                    });
+                    
+                    addSpeakerMessage(`PARTIAL #${++partialCount}: "${fullText}"`, 'partial');
+                    
+                    await delay(150);
+                }
+                
+                await delay(300);
+            }
+            
+            // Final
+            speakerSocket.emit('translation-stream', {
+                sessionCode,
+                original: fullText,
+                isFinal: true,
+                timestamp: Date.now()
+            });
+            
+            addSpeakerMessage(`FINAL: "${fullText}"`, 'final');
+        });
+        
+        function addSpeakerMessage(text, type) {
+            const display = document.getElementById('speakerDisplay');
+            const message = document.createElement('div');
+            message.className = `message ${type}`;
+            message.innerHTML = `<span class="timestamp">${new Date().toLocaleTimeString()}</span>${text}`;
+            display.appendChild(message);
+            display.scrollTop = display.scrollHeight;
+        }
+        
+        // Listener side
+        let listenerSocket = null;
+        let metrics = {
+            partials: 0,
+            audio: 0,
+            totalLatency: 0,
+            confidenceSum: 0,
+            confidenceCount: 0
+        };
+        
+        document.getElementById('joinBtn').addEventListener('click', () => {
+            const code = document.getElementById('listenerCode').value.toUpperCase();
+            const lang = document.getElementById('listenerLang').value;
+            
+            listenerSocket = io();
+            
+            listenerSocket.on('connect', () => {
+                listenerSocket.emit('streaming-listener-join', {
+                    sessionCode: code,
+                    preferredLanguage: lang
+                });
+            });
+            
+            listenerSocket.on('joined', (data) => {
+                if (data.ok) {
+                    document.getElementById('listenerStatus').className = 'status connected';
+                    document.getElementById('listenerStatus').textContent = `Connected to session ${code}`;
+                    document.getElementById('joinBtn').disabled = true;
+                    document.getElementById('leaveBtn').disabled = false;
+                    
+                    addListenerMessage('Connected! Waiting for translations...', 'system');
+                }
+            });
+            
+            // Handle translation updates (immediate display)
+            listenerSocket.on('translation-update', (data) => {
+                metrics.partials++;
+                document.getElementById('partialCount').textContent = metrics.partials;
+                
+                const type = data.isFinal ? 'final' : 'partial';
+                addListenerMessage(`[DISPLAY #${data.partialNumber}] ${data.text}`, type);
+                
+                // Update latency
+                if (data.timestamp) {
+                    const latency = Date.now() - data.timestamp;
+                    metrics.totalLatency += latency;
+                    document.getElementById('latency').textContent = 
+                        Math.round(metrics.totalLatency / metrics.partials) + 'ms';
+                }
+            });
+            
+            // Handle audio stream (stable sentences)
+            listenerSocket.on('audio-stream', (data) => {
+                metrics.audio++;
+                document.getElementById('audioCount').textContent = metrics.audio;
+                
+                if (data.confidence !== undefined) {
+                    metrics.confidenceSum += data.confidence;
+                    metrics.confidenceCount++;
+                    const avgConf = (metrics.confidenceSum / metrics.confidenceCount * 100).toFixed(0);
+                    document.getElementById('confidence').textContent = avgConf + '%';
+                    
+                    const confClass = data.confidence > 0.7 ? 'high' : 
+                                     data.confidence > 0.4 ? 'medium' : 'low';
+                    
+                    addListenerMessage(
+                        `🔊 [AUDIO] "${data.text}" <span class="confidence ${confClass}">${(data.confidence * 100).toFixed(0)}% conf</span>`,
+                        'audio'
+                    );
+                }
+            });
+            
+            listenerSocket.on('disconnect', () => {
+                handleListenerDisconnect();
+            });
+        });
+        
+        document.getElementById('leaveBtn').addEventListener('click', () => {
+            if (listenerSocket) {
+                listenerSocket.disconnect();
+                handleListenerDisconnect();
+            }
+        });
+        
+        function handleListenerDisconnect() {
+            document.getElementById('listenerStatus').className = 'status disconnected';
+            document.getElementById('listenerStatus').textContent = 'Not Connected';
+            document.getElementById('joinBtn').disabled = false;
+            document.getElementById('leaveBtn').disabled = true;
+            
+            // Reset metrics
+            metrics = {
+                partials: 0,
+                audio: 0,
+                totalLatency: 0,
+                confidenceSum: 0,
+                confidenceCount: 0
+            };
+            
+            document.getElementById('partialCount').textContent = '0';
+            document.getElementById('audioCount').textContent = '0';
+            document.getElementById('latency').textContent = '0ms';
+            document.getElementById('confidence').textContent = '0%';
+        }
+        
+        function addListenerMessage(html, type) {
+            const display = document.getElementById('listenerDisplay');
+            const message = document.createElement('div');
+            message.className = `message ${type}`;
+            message.innerHTML = `<span class="timestamp">${new Date().toLocaleTimeString()}</span>${html}`;
+            display.appendChild(message);
+            display.scrollTop = display.scrollHeight;
+        }
+        
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+    </script>
+</body>
+</html>

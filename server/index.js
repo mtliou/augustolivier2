@@ -6,7 +6,6 @@ import { fileURLToPath } from 'url';
 import { Server } from 'socket.io';
 import http from 'http';
 import { speechTokenRouter } from './token-route.js';
-import { ttsRouter } from './tts-route.js';
 import { initOptimizedSocket } from './websocket.js';
 import { performanceMonitor } from './performance-monitor.js';
 
@@ -25,9 +24,6 @@ app.use('/', express.static(path.join(__dirname, '..', 'public')));
 
 // Token endpoint for Speech SDK
 app.use('/api/speech', speechTokenRouter);
-
-// TTS endpoint using ElevenLabs
-app.use('/api/tts', ttsRouter);
 
 // Performance metrics endpoint
 app.get('/api/metrics', (req, res) => {
@@ -61,8 +57,8 @@ const io = new Server(server, {
   // Reduce pingTimeout for faster disconnection detection
   pingTimeout: 10000,
   pingInterval: 5000,
-  // Enable binary transport
-  transports: ['websocket']
+  // Allow both polling and websocket transports
+  transports: ['polling', 'websocket']
 });
 
 // Initialize optimized WebSocket handling

@@ -411,6 +411,19 @@
                 return;
             }
 
+            // Request microphone permission FIRST
+            try {
+                console.log('Requesting microphone permission...');
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                console.log('✅ Microphone permission granted');
+                // Stop the stream immediately - we'll use Azure SDK for actual recording
+                stream.getTracks().forEach(track => track.stop());
+            } catch (error) {
+                console.error('❌ Microphone permission denied:', error);
+                alert('Microphone access is required for this application. Please grant permission and try again.');
+                return;
+            }
+
             const sourceLang = document.getElementById('sourceLang').value;
             const targetLangs = Array.from(selectedLanguages);
             
@@ -473,13 +486,13 @@
                 await window.ensureSDKLoaded();
                 
                 // Fetch speech config from server
-                const configResponse = await fetch('/speech-config');
-                const config = await configResponse.json();
+                const configResponse = await fetch('/api/speech/token');
+                const tokenData = await configResponse.json();
                 
-                // Configure for streaming translation
-                const speechConfig = SpeechSDK.SpeechTranslationConfig.fromSubscription(
-                    config.key,
-                    config.region
+                // Configure for streaming translation using token
+                const speechConfig = SpeechSDK.SpeechTranslationConfig.fromAuthorizationToken(
+                    tokenData.token,
+                    tokenData.region
                 );
                 
                 // Map short codes to Azure locale codes for recognition
@@ -511,8 +524,16 @@
                 // Enable partial results for streaming
                 speechConfig.enableDictation();
                 
+                // Create audio config with explicit microphone
                 const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+                if (!audioConfig) {
+                    throw new Error('Failed to create audio config - microphone may not be available');
+                }
+                
                 recognition = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
+                if (!recognition) {
+                    throw new Error('Failed to create TranslationRecognizer');
+                }
                 
                 console.log('TranslationRecognizer created with config:', {
                     source: sourceAzureCode,

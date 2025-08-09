@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Speaker - Text Input</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .badge {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+        }
+        
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .output {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .output-message {
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            background: white;
+            border-radius: 6px;
+            border-left: 3px solid #667eea;
+            font-size: 14px;
+        }
+        
+        .output-message.partial {
+            border-left-color: #ffc107;
+            opacity: 0.8;
+        }
+        
+        .output-message.final {
+            border-left-color: #28a745;
+        }
+        
+        .timestamp {
+            font-size: 11px;
+            color: #999;
+            margin-right: 8px;
+        }
+        
+        .session-info {
+            background: #e7f5ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .session-info.active {
+            display: block;
+        }
+        
+        .session-code-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0066cc;
+            text-align: center;
+            margin: 10px 0;
+        }
+        
+        .hint {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ Simple Speaker <span class="badge">NO MIC NEEDED</span></h1>
+        <p class="subtitle">Type text to simulate speech - Perfect for testing!</p>
+        
+        <div class="hint">
+            💡 This interface simulates speech by sending text progressively. Use it to test the hybrid translation system without microphone issues.
+        </div>
+        
+        <div id="sessionInfo" class="session-info">
+            <div>Session Active</div>
+            <div class="session-code-display" id="sessionCodeDisplay">----</div>
+            <div style="text-align: center; font-size: 12px; color: #666;">
+                Share this code with listeners
+            </div>
+        </div>
+        
+        <div id="status" class="status disconnected">Not Connected</div>
+        
+        <div class="form-group">
+            <label for="sessionCode">Session Code (4 characters)</label>
+            <input type="text" id="sessionCode" placeholder="e.g., TEST" maxlength="4" 
+                   style="text-transform: uppercase;" value="TEST">
+        </div>
+        
+        <div class="form-group">
+            <label for="sourceLang">Source Language</label>
+            <select id="sourceLang">
+                <option value="en-US">English (US)</option>
+                <option value="en-GB">English (UK)</option>
+                <option value="es-ES">Spanish</option>
+                <option value="fr-FR">French</option>
+                <option value="de-DE">German</option>
+                <option value="zh-CN">Chinese</option>
+                <option value="ja-JP">Japanese</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="targetLangs">Target Languages (hold Ctrl/Cmd for multiple)</label>
+            <select id="targetLangs" multiple size="4">
+                <option value="es" selected>Spanish</option>
+                <option value="fr" selected>French</option>
+                <option value="de">German</option>
+                <option value="zh">Chinese</option>
+                <option value="ja">Japanese</option>
+                <option value="ar">Arabic</option>
+                <option value="pt">Portuguese</option>
+                <option value="ru">Russian</option>
+            </select>
+        </div>
+        
+        <button id="connectBtn" class="btn btn-primary">Start Session</button>
+        <button id="disconnectBtn" class="btn btn-danger" disabled>End Session</button>
+        
+        <div id="textInputSection" style="display: none;">
+            <div class="form-group">
+                <label for="textInput">Enter Text to "Speak"</label>
+                <textarea id="textInput" placeholder="Type your message here...">Hello everyone. Welcome to today's meeting. Let's discuss our quarterly results.</textarea>
+            </div>
+            
+            <button id="sendProgressiveBtn" class="btn btn-success">Send Progressively (Simulates Speech)</button>
+            <button id="sendInstantBtn" class="btn btn-success">Send Instantly</button>
+        </div>
+        
+        <div class="output" id="output" style="display: none;">
+            <h3>Output Stream</h3>
+            <div id="outputMessages"></div>
+        </div>
+    </div>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        let socket = null;
+        let sessionCode = '';
+        let partialCount = 0;
+        
+        // DOM elements
+        const elements = {
+            sessionCode: document.getElementById('sessionCode'),
+            sourceLang: document.getElementById('sourceLang'),
+            targetLangs: document.getElementById('targetLangs'),
+            connectBtn: document.getElementById('connectBtn'),
+            disconnectBtn: document.getElementById('disconnectBtn'),
+            status: document.getElementById('status'),
+            sessionInfo: document.getElementById('sessionInfo'),
+            sessionCodeDisplay: document.getElementById('sessionCodeDisplay'),
+            textInputSection: document.getElementById('textInputSection'),
+            textInput: document.getElementById('textInput'),
+            sendProgressiveBtn: document.getElementById('sendProgressiveBtn'),
+            sendInstantBtn: document.getElementById('sendInstantBtn'),
+            output: document.getElementById('output'),
+            outputMessages: document.getElementById('outputMessages')
+        };
+        
+        // Connect button
+        elements.connectBtn.addEventListener('click', () => {
+            sessionCode = elements.sessionCode.value.trim().toUpperCase();
+            
+            if (!sessionCode || sessionCode.length !== 4) {
+                alert('Please enter a 4-character session code');
+                return;
+            }
+            
+            // Get selected target languages
+            const selectedOptions = Array.from(elements.targetLangs.selectedOptions);
+            const targetLangs = selectedOptions.map(opt => opt.value);
+            
+            if (targetLangs.length === 0) {
+                alert('Please select at least one target language');
+                return;
+            }
+            
+            // Connect to server
+            socket = io();
+            
+            socket.on('connect', () => {
+                console.log('Connected to server');
+                
+                // Join as speaker
+                socket.emit('streaming-speaker-join', {
+                    sessionCode: sessionCode,
+                    sourceLang: elements.sourceLang.value,
+                    targetLangs: targetLangs
+                });
+            });
+            
+            socket.on('joined', (data) => {
+                if (data.ok) {
+                    console.log('Session started:', data);
+                    
+                    // Update UI
+                    elements.status.className = 'status connected';
+                    elements.status.textContent = 'Connected - Ready to send text';
+                    elements.sessionInfo.classList.add('active');
+                    elements.sessionCodeDisplay.textContent = sessionCode;
+                    elements.connectBtn.disabled = true;
+                    elements.disconnectBtn.disabled = false;
+                    elements.textInputSection.style.display = 'block';
+                    elements.output.style.display = 'block';
+                    
+                    addOutput('✅ Session started! Listeners can join with code: ' + sessionCode, 'success');
+                }
+            });
+            
+            socket.on('disconnect', () => {
+                console.log('Disconnected from server');
+                handleDisconnect();
+            });
+        });
+        
+        // Disconnect button
+        elements.disconnectBtn.addEventListener('click', () => {
+            if (socket) {
+                socket.disconnect();
+            }
+            handleDisconnect();
+        });
+        
+        // Send text progressively (simulates speech)
+        elements.sendProgressiveBtn.addEventListener('click', async () => {
+            const text = elements.textInput.value.trim();
+            if (!text) return;
+            
+            partialCount = 0;
+            elements.sendProgressiveBtn.disabled = true;
+            
+            // Split into words
+            const words = text.split(' ');
+            let accumulated = '';
+            
+            // Send progressively
+            for (let i = 0; i < words.length; i++) {
+                accumulated += (i > 0 ? ' ' : '') + words[i];
+                
+                // Send partial
+                socket.emit('translation-stream', {
+                    sessionCode: sessionCode,
+                    original: accumulated,
+                    isFinal: false,
+                    timestamp: Date.now(),
+                    offset: i * 500,
+                    duration: 500
+                });
+                
+                addOutput(`PARTIAL #${++partialCount}: "${accumulated}"`, 'partial');
+                
+                // Wait between words (simulates natural speech)
+                await delay(200 + Math.random() * 300);
+            }
+            
+            // Send final after a pause
+            await delay(500);
+            socket.emit('translation-stream', {
+                sessionCode: sessionCode,
+                original: text,
+                isFinal: true,
+                timestamp: Date.now()
+            });
+            
+            addOutput(`FINAL: "${text}"`, 'final');
+            
+            elements.sendProgressiveBtn.disabled = false;
+        });
+        
+        // Send text instantly
+        elements.sendInstantBtn.addEventListener('click', () => {
+            const text = elements.textInput.value.trim();
+            if (!text) return;
+            
+            // Send as final immediately
+            socket.emit('translation-stream', {
+                sessionCode: sessionCode,
+                original: text,
+                isFinal: true,
+                timestamp: Date.now()
+            });
+            
+            addOutput(`SENT: "${text}"`, 'final');
+        });
+        
+        function handleDisconnect() {
+            elements.status.className = 'status disconnected';
+            elements.status.textContent = 'Not Connected';
+            elements.sessionInfo.classList.remove('active');
+            elements.connectBtn.disabled = false;
+            elements.disconnectBtn.disabled = true;
+            elements.textInputSection.style.display = 'none';
+            elements.output.style.display = 'none';
+            elements.outputMessages.innerHTML = '';
+            partialCount = 0;
+            
+            if (socket) {
+                socket = null;
+            }
+        }
+        
+        function addOutput(message, type = 'info') {
+            const messageEl = document.createElement('div');
+            messageEl.className = `output-message ${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            messageEl.innerHTML = `<span class="timestamp">${timestamp}</span>${message}`;
+            
+            elements.outputMessages.appendChild(messageEl);
+            elements.outputMessages.scrollTop = elements.outputMessages.scrollHeight;
+        }
+        
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+    </script>
+</body>
+</html>

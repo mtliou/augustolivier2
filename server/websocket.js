@@ -2,10 +2,19 @@ import { v4 as uuid } from 'uuid';
 import { recordConnection, recordTranslation, recordError } from './performance-monitor.js';
 import { getTranslator } from './text-translator.js';
 import { streamingSentenceExtractor } from './streaming-sentence-extractor.js';
+import { hybridSentenceExtractor } from './hybrid-sentence-extractor.js';
 import { StreamingTTS } from './streaming-tts.js';
 import { punctuationHelper } from './punctuation-helper.js';
 
 const sessions = new Map(); // code -> { speakerId, sourceLang, targetLangs, listeners: Map, metrics }
+
+// Configuration for hybrid mode
+const USE_HYBRID_MODE = true; // Toggle between hybrid and original approach
+const HYBRID_CONFIG = {
+  stabilityThreshold: 2,    // Sentences need 2 appearances
+  stabilityTimeMs: 500,     // Or 500ms persistence
+  displayPartials: true      // Show partials immediately
+};
 
 // Initialize TTS provider
 const ttsProvider = new StreamingTTS({
@@ -79,6 +88,11 @@ export function initOptimizedSocket(io) {
         data.isFinal
       );
       
+      // Log processing mode
+      if (USE_HYBRID_MODE) {
+        console.log(`🔄 [HYBRID] Processing ${data.isFinal ? 'FINAL' : 'PARTIAL'} #${session.metrics.translations}`);
+      }
+      
       // Check if we have translations or need to generate them
       let translations = data.translations || {};
       
@@ -113,26 +127,43 @@ export function initOptimizedSocket(io) {
         latency
       });
       
-      // Generate TTS for each translation (ONLY FOR FINALS to avoid repetition)
-      for (const [lang, translatedText] of Object.entries(translations)) {
-        if (!translatedText) continue;
-        
-        // Process transcript - only generates TTS for final results
-        const { sentences, shouldGenerateTTS } = streamingSentenceExtractor.processTranscript(
-          code,
-          lang,
-          translatedText,
-          data.isFinal
-        );
-        
-        // Only generate TTS if we have new sentences from a final result
-        if (shouldGenerateTTS && sentences.length > 0) {
-          console.log(`🎯 Generating TTS for ${sentences.length} final sentences in ${lang}`);
+      // Generate TTS based on selected mode
+      if (USE_HYBRID_MODE) {
+        // HYBRID MODE: Generate TTS for stable sentences across partials
+        for (const [lang, translatedText] of Object.entries(translations)) {
+          if (!translatedText) continue;
           
-          for (const sentence of sentences) {
-            try {
-              // Generate TTS audio
-              const audioStream = await ttsProvider.streamSynthesize(sentence, lang);
+          // Process with hybrid extractor
+          const result = hybridSentenceExtractor.processPartial(
+            code,
+            lang,
+            translatedText,
+            data.isFinal
+          );
+          
+          // Send display update immediately (all partials)
+          session.listeners.forEach((listener, listenerId) => {
+            if (listener.lang === lang) {
+              const listenerSocket = io.sockets.sockets.get(listenerId);
+              if (listenerSocket) {
+                listenerSocket.emit('translation-update', {
+                  text: result.displayText,
+                  language: lang,
+                  isFinal: data.isFinal,
+                  partialNumber: result.partialNumber
+                });
+              }
+            }
+          });
+          
+          // Generate TTS only for stable sentences
+          if (result.shouldGenerateTTS && result.stableSentences.length > 0) {
+            console.log(`🎯 [HYBRID] Generating TTS for ${result.stableSentences.length} stable sentences in ${lang}`);
+            
+            for (const sentenceData of result.stableSentences) {
+              try {
+                // Generate TTS audio
+                const audioStream = await ttsProvider.streamSynthesize(sentenceData.text, lang);
               
               if (audioStream) {
                 // Collect audio chunks
@@ -152,9 +183,11 @@ export function initOptimizedSocket(io) {
                           audio: base64Audio,
                           format: 'mp3',
                           language: lang,
-                          text: sentence
+                          text: sentenceData.text,
+                          confidence: sentenceData.confidence,
+                          isStable: true
                         });
-                        console.log(`🔊 TTS sent to listener for ${lang}: "${sentence.substring(0, 30)}..."`);
+                        console.log(`🔊 [HYBRID] TTS sent for ${lang}: "${sentenceData.text.substring(0, 30)}..." (confidence: ${(sentenceData.confidence * 100).toFixed(0)}%)`);
                       }
                     }
                   });
@@ -164,8 +197,67 @@ export function initOptimizedSocket(io) {
                   console.error(`TTS stream error for ${lang}:`, error);
                 });
               }
-            } catch (error) {
-              console.error(`TTS generation error for ${lang}:`, error);
+              } catch (error) {
+                console.error(`TTS generation error for ${lang}:`, error);
+              }
+            }
+          }
+        }
+      } else {
+        // ORIGINAL MODE: Only process finals to avoid repetition
+        for (const [lang, translatedText] of Object.entries(translations)) {
+          if (!translatedText) continue;
+          
+          // Process transcript - only generates TTS for final results
+          const { sentences, shouldGenerateTTS } = streamingSentenceExtractor.processTranscript(
+            code,
+            lang,
+            translatedText,
+            data.isFinal
+          );
+          
+          // Only generate TTS if we have new sentences from a final result
+          if (shouldGenerateTTS && sentences.length > 0) {
+            console.log(`🎯 [ORIGINAL] Generating TTS for ${sentences.length} final sentences in ${lang}`);
+            
+            for (const sentence of sentences) {
+              try {
+                // Generate TTS audio
+                const audioStream = await ttsProvider.streamSynthesize(sentence, lang);
+                
+                if (audioStream) {
+                  // Collect audio chunks
+                  const chunks = [];
+                  audioStream.on('data', chunk => chunks.push(chunk));
+                  
+                  audioStream.on('end', () => {
+                    const audioBuffer = Buffer.concat(chunks);
+                    const base64Audio = audioBuffer.toString('base64');
+                    
+                    // Send audio to listeners of this language
+                    session.listeners.forEach((listener, listenerId) => {
+                      if (listener.lang === lang) {
+                        const listenerSocket = io.sockets.sockets.get(listenerId);
+                        if (listenerSocket) {
+                          listenerSocket.emit('audio-stream', {
+                            audio: base64Audio,
+                            format: 'mp3',
+                            language: lang,
+                            text: sentence
+                          });
+                          console.log(`🔊 [ORIGINAL] TTS sent for ${lang}: "${sentence.substring(0, 30)}..."`); 
+                        }
+                      }
+                    });
+                  });
+                  
+                  audioStream.on('error', (error) => {
+                    console.error(`TTS stream error for ${lang}:`, error);
+                  });
+                }
+              } catch (error) {
+                console.error(`TTS generation error for ${lang}:`, error);
+              }
             }
           }
         }
@@ -252,6 +344,14 @@ export function initOptimizedSocket(io) {
             console.log(`   Duration: ${duration.toFixed(2)}s`);
             console.log(`   Translations: ${session.metrics.translations}`);
             console.log(`   Avg Latency: ${avgLatency.toFixed(2)}ms`);
+          }
+          
+          // Clean up hybrid extractors if using hybrid mode
+          if (USE_HYBRID_MODE) {
+            session.targetLangs.forEach(lang => {
+              hybridSentenceExtractor.clearSession(code, lang);
+            });
+            console.log(`🧹 [HYBRID] Cleaned up extractors for session ${code}`);
           }
           
           io.to(code).emit('speaker-disconnected');

@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hybrid Translation Listener</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 28px;
+        }
+        
+        .mode-indicator {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+        
+        .setup-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+        }
+        
+        .input-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .form-control {
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 500;
+        }
+        
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .translation-display {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            min-height: 200px;
+            margin-bottom: 20px;
+        }
+        
+        .partial-text {
+            color: #6c757d;
+            font-style: italic;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            border-left: 3px solid #ffc107;
+        }
+        
+        .final-text {
+            color: #212529;
+            font-weight: 500;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            border-left: 3px solid #28a745;
+        }
+        
+        .sentence-playing {
+            background: linear-gradient(90deg, #e3f2fd 0%, #ffffff 100%);
+            border-left: 3px solid #2196f3;
+            animation: pulse 0.5s ease-in-out;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .metric-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .metric-label {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        
+        .confidence-indicator {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        
+        .confidence-high {
+            background: #28a745;
+            color: white;
+        }
+        
+        .confidence-medium {
+            background: #ffc107;
+            color: #333;
+        }
+        
+        .confidence-low {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .audio-status {
+            padding: 10px;
+            background: #e7f3ff;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            display: none;
+        }
+        
+        .audio-status.unlocked {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .audio-status.locked {
+            background: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎧 Hybrid Translation Listener</h1>
+        <div class="mode-indicator">HYBRID MODE: Fast Display + Smart Audio</div>
+        
+        <div class="setup-section">
+            <div class="input-group">
+                <input type="text" 
+                       id="sessionCode" 
+                       class="form-control" 
+                       placeholder="Session Code (e.g., ABCD)" 
+                       maxlength="4"
+                       style="text-transform: uppercase">
+                <select id="targetLang" class="form-control">
+                    <option value="es">Spanish (es)</option>
+                    <option value="fr">French (fr)</option>
+                    <option value="de">German (de)</option>
+                    <option value="zh">Chinese (zh)</option>
+                    <option value="ja">Japanese (ja)</option>
+                    <option value="ar">Arabic (ar)</option>
+                    <option value="pt">Portuguese (pt)</option>
+                    <option value="ru">Russian (ru)</option>
+                    <option value="hi">Hindi (hi)</option>
+                    <option value="ko">Korean (ko)</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button id="joinBtn" class="btn btn-primary">Join Session</button>
+                <button id="leaveBtn" class="btn btn-danger" disabled>Leave Session</button>
+            </div>
+        </div>
+        
+        <div id="status" class="status disconnected">Not connected</div>
+        
+        <div id="audioStatus" class="audio-status">
+            🔇 Click anywhere to enable audio playback
+        </div>
+        
+        <div class="translation-display">
+            <h3>Translation Stream</h3>
+            <div id="translationArea"></div>
+        </div>
+        
+        <div class="metrics">
+            <div class="metric-card">
+                <div class="metric-value" id="partialCount">0</div>
+                <div class="metric-label">Partials</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="sentenceCount">0</div>
+                <div class="metric-label">Sentences</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="audioCount">0</div>
+                <div class="metric-label">Audio Played</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="latencyMs">0ms</div>
+                <div class="metric-label">Avg Latency</div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+    class HybridTranslationListener {
+        constructor() {
+            this.socket = null;
+            this.sessionCode = '';
+            this.audioQueue = [];
+            this.isPlaying = false;
+            this.audioContext = null;
+            this.audioUnlocked = false;
+            
+            // Metrics
+            this.metrics = {
+                partials: 0,
+                sentences: 0,
+                audioPlayed: 0,
+                totalLatency: 0,
+                latencyCount: 0
+            };
+            
+            // Track displayed text
+            this.currentText = '';
+            this.sentenceElements = new Map();
+            
+            this.initializeElements();
+            this.attachEventListeners();
+            this.initializeAudioContext();
+        }
+        
+        initializeElements() {
+            this.elements = {
+                sessionCode: document.getElementById('sessionCode'),
+                targetLang: document.getElementById('targetLang'),
+                joinBtn: document.getElementById('joinBtn'),
+                leaveBtn: document.getElementById('leaveBtn'),
+                status: document.getElementById('status'),
+                audioStatus: document.getElementById('audioStatus'),
+                translationArea: document.getElementById('translationArea'),
+                partialCount: document.getElementById('partialCount'),
+                sentenceCount: document.getElementById('sentenceCount'),
+                audioCount: document.getElementById('audioCount'),
+                latencyMs: document.getElementById('latencyMs')
+            };
+        }
+        
+        attachEventListeners() {
+            this.elements.joinBtn.addEventListener('click', () => this.joinSession());
+            this.elements.leaveBtn.addEventListener('click', () => this.leaveSession());
+            
+            this.elements.sessionCode.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') this.joinSession();
+            });
+            
+            // Audio unlock listeners
+            document.addEventListener('click', () => this.unlockAudio());
+            document.addEventListener('keydown', () => this.unlockAudio());
+            document.addEventListener('touchstart', () => this.unlockAudio());
+        }
+        
+        initializeAudioContext() {
+            try {
+                window.AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.audioContext = new AudioContext();
+                this.elements.audioStatus.style.display = 'block';
+            } catch (error) {
+                console.error('Failed to initialize audio context:', error);
+            }
+        }
+        
+        async unlockAudio() {
+            if (this.audioUnlocked || !this.audioContext) return;
+            
+            try {
+                if (this.audioContext.state === 'suspended') {
+                    await this.audioContext.resume();
+                }
+                
+                // Create and play silent buffer to unlock
+                const buffer = this.audioContext.createBuffer(1, 1, 22050);
+                const source = this.audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(this.audioContext.destination);
+                source.start(0);
+                
+                this.audioUnlocked = true;
+                this.elements.audioStatus.className = 'audio-status unlocked';
+                this.elements.audioStatus.textContent = '🔊 Audio enabled - ready to play';
+                
+                // Process any queued audio
+                if (this.audioQueue.length > 0 && !this.isPlaying) {
+                    this.processAudioQueue();
+                }
+            } catch (error) {
+                console.error('Failed to unlock audio:', error);
+            }
+        }
+        
+        joinSession() {
+            const code = this.elements.sessionCode.value.trim().toUpperCase();
+            const targetLang = this.elements.targetLang.value;
+            
+            if (code.length !== 4) {
+                alert('Please enter a 4-character session code');
+                return;
+            }
+            
+            this.sessionCode = code;
+            this.socket = io();
+            
+            this.socket.on('connect', () => {
+                console.log('Connected to server');
+                this.socket.emit('streaming-listener-join', {
+                    sessionCode: code,
+                    preferredLanguage: targetLang
+                });
+            });
+            
+            this.socket.on('joined', (data) => {
+                if (data.ok) {
+                    this.updateStatus('connected', `Connected to session ${code}`);
+                    this.elements.joinBtn.disabled = true;
+                    this.elements.leaveBtn.disabled = false;
+                    console.log('Joined session:', data);
+                }
+            });
+            
+            this.socket.on('session-not-found', () => {
+                this.updateStatus('disconnected', 'Session not found');
+                this.leaveSession();
+            });
+            
+            // Handle translation updates (immediate display)
+            this.socket.on('translation-update', (data) => {
+                this.handleTranslationUpdate(data);
+            });
+            
+            // Handle audio stream (stable sentences)
+            this.socket.on('audio-stream', (data) => {
+                this.handleAudioStream(data);
+            });
+            
+            this.socket.on('disconnect', () => {
+                this.updateStatus('disconnected', 'Disconnected from server');
+                this.leaveSession();
+            });
+        }
+        
+        handleTranslationUpdate(data) {
+            this.metrics.partials++;
+            this.updateMetric('partialCount', this.metrics.partials);
+            
+            // Create or update display element
+            const element = document.createElement('div');
+            element.className = data.isFinal ? 'final-text' : 'partial-text';
+            element.innerHTML = `
+                <span>${data.text}</span>
+                ${data.partialNumber ? `<span style="color: #999; font-size: 11px;">#${data.partialNumber}</span>` : ''}
+            `;
+            
+            // Update display
+            this.currentText = data.text;
+            this.elements.translationArea.innerHTML = '';
+            this.elements.translationArea.appendChild(element);
+            
+            // Auto-scroll
+            this.elements.translationArea.scrollTop = this.elements.translationArea.scrollHeight;
+        }
+        
+        handleAudioStream(data) {
+            console.log('Audio received:', {
+                language: data.language,
+                text: data.text?.substring(0, 50) + '...',
+                confidence: data.confidence,
+                isStable: data.isStable
+            });
+            
+            // Add to audio queue
+            this.audioQueue.push(data);
+            
+            // Update metrics
+            this.metrics.sentences++;
+            this.updateMetric('sentenceCount', this.metrics.sentences);
+            
+            // Add confidence indicator
+            if (data.confidence !== undefined) {
+                const confidencePct = (data.confidence * 100).toFixed(0);
+                const confidenceClass = 
+                    data.confidence > 0.7 ? 'confidence-high' :
+                    data.confidence > 0.4 ? 'confidence-medium' : 
+                    'confidence-low';
+                
+                const indicator = document.createElement('span');
+                indicator.className = `confidence-indicator ${confidenceClass}`;
+                indicator.textContent = `${confidencePct}% confidence`;
+                
+                const lastElement = this.elements.translationArea.lastElementChild;
+                if (lastElement) {
+                    lastElement.appendChild(indicator);
+                }
+            }
+            
+            // Process queue if not already playing
+            if (!this.isPlaying) {
+                this.processAudioQueue();
+            }
+        }
+        
+        async processAudioQueue() {
+            if (this.audioQueue.length === 0 || this.isPlaying || !this.audioUnlocked) {
+                return;
+            }
+            
+            this.isPlaying = true;
+            const audioData = this.audioQueue.shift();
+            
+            try {
+                // Highlight playing sentence
+                const playingElement = document.createElement('div');
+                playingElement.className = 'final-text sentence-playing';
+                playingElement.innerHTML = `🔊 ${audioData.text}`;
+                this.elements.translationArea.appendChild(playingElement);
+                
+                // Play audio
+                const audio = new Audio(`data:audio/mp3;base64,${audioData.audio}`);
+                
+                await audio.play();
+                
+                // Update metrics
+                this.metrics.audioPlayed++;
+                this.updateMetric('audioCount', this.metrics.audioPlayed);
+                
+                // Wait for audio to finish
+                audio.onended = () => {
+                    this.isPlaying = false;
+                    
+                    // Remove highlight
+                    playingElement.classList.remove('sentence-playing');
+                    
+                    // Process next in queue
+                    if (this.audioQueue.length > 0) {
+                        this.processAudioQueue();
+                    }
+                };
+            } catch (error) {
+                console.error('Audio playback error:', error);
+                this.isPlaying = false;
+                
+                // Try next in queue
+                if (this.audioQueue.length > 0) {
+                    setTimeout(() => this.processAudioQueue(), 100);
+                }
+            }
+        }
+        
+        updateMetric(elementId, value) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                if (elementId === 'latencyMs') {
+                    element.textContent = `${value}ms`;
+                } else {
+                    element.textContent = value;
+                }
+            }
+        }
+        
+        updateStatus(type, message) {
+            this.elements.status.className = `status ${type}`;
+            this.elements.status.textContent = message || (type === 'connected' ? 'Connected' : 'Disconnected');
+        }
+        
+        leaveSession() {
+            if (this.socket) {
+                this.socket.disconnect();
+                this.socket = null;
+            }
+            
+            this.audioQueue = [];
+            this.isPlaying = false;
+            
+            this.elements.joinBtn.disabled = false;
+            this.elements.leaveBtn.disabled = true;
+            this.updateStatus('disconnected');
+            
+            this.elements.translationArea.innerHTML = '<div style="color: #999; text-align: center;">Waiting for session...</div>';
+            
+            // Reset metrics
+            this.metrics = {
+                partials: 0,
+                sentences: 0,
+                audioPlayed: 0,
+                totalLatency: 0,
+                latencyCount: 0
+            };
+            
+            this.updateMetric('partialCount', 0);
+            this.updateMetric('sentenceCount', 0);
+            this.updateMetric('audioCount', 0);
+            this.updateMetric('latencyMs', 0);
+        }
+    }
+    
+    // Initialize the application
+    const app = new HybridTranslationListener();
+    </script>
+</body>
+</html>
