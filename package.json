@@ -1,0 +1,28 @@
+{
+    "name": "azure-s2s-optimized",
+    "version": "2.0.0",
+    "type": "module",
+    "scripts": {
+        "start": "node server/index.js",
+        "start:streaming": "node server/index-streaming.js",
+        "dev": "node server/index.js",
+        "test:keys": "node test-azure-keys.js",
+        "setup": "npm install && echo 'Please add your API keys to .env file'",
+        "test:audio": "open http://localhost:8080/test-audio.html"
+    },
+    "dependencies": {
+        "axios": "^1.7.2",
+        "cors": "^2.8.5",
+        "dotenv": "^16.4.5",
+        "express": "^4.19.2",
+        "microsoft-cognitiveservices-speech-sdk": "^1.45.0",
+        "redis": "^4.6.13",
+        "socket.io": "^4.7.5",
+        "socket.io-client": "^4.8.1",
+        "undici": "^6.19.8",
+        "uuid": "^9.0.1"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}

@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Speaker – Azure S2S</title>
+  <link rel="stylesheet" href="./style.css"/>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <!-- Microsoft Cognitive Services Speech SDK -->
+  <script src="https://aka.ms/csspeech/jsbrowserpackage"></script>
+</head>
+<body>
+  <h1>Speaker</h1>
+  <div class="row">
+    <label>Session code</label>
+    <input id="code" maxlength="4" placeholder="ABCD" style="text-transform:uppercase"/>
+    <label>Expected languages</label>
+    <select id="langHint">
+      <option value="en-US,fr-CA">English (US) + French (CA)</option>
+      <option value="en-US">English only</option>
+      <option value="fr-CA">French (CA) only</option>
+    </select>
+    <button id="startBtn">Start</button>
+    <button id="stopBtn" disabled>Stop</button>
+  </div>
+
+  <label>Phrase list (comma separated terms)</label>
+  <input id="phrases" placeholder="brand names, acronyms, speaker names"/>
+
+  <div class="log" id="log"></div>
+
+<script>
+const log = (...a) => { document.getElementById('log').innerHTML += a.join(' ') + '<br/>'; }
+let recognizer, socket, running = false;
+
+document.getElementById('startBtn').onclick = async () => {
+  const code = document.getElementById('code').value.trim().toUpperCase();
+  if (code.length !== 4) { alert('Need 4-char session code'); return; }
+  const langs = document.getElementById('langHint').value.split(',');
+  await startSession(code, langs);
+};
+document.getElementById('stopBtn').onclick = async () => stopSession();
+
+async function startSession(sessionCode, langCandidates) {
+  if (running) return;
+  running = true;
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('stopBtn').disabled = false;
+
+  // socket
+  socket = io();
+  socket.emit('speaker-join', { sessionCode, sourceLanguageHint: langCandidates[0] });
+
+  // get Speech token
+  const tok = await fetch('/api/speech/token').then(r => r.json());
+  const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(tok.token, tok.region);
+  // Continuous recognition + detailed output (for better stability/metadata):contentReference[oaicite:11]{index=11}:contentReference[oaicite:12]{index=12}
+  speechConfig.outputFormat = SpeechSDK.OutputFormat.Detailed;
+
+  // Auto-detect source language – limit candidates for accuracy & speed:contentReference[oaicite:13]{index=13}
+  let lidConfig = null;
+  if (langCandidates.length > 1) {
+    lidConfig = SpeechSDK.AutoDetectSourceLanguageConfig.fromLanguages(langCandidates);
+  }
+  const audioCfg = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+  recognizer = lidConfig
+    ? SpeechSDK.SpeechRecognizer.FromConfig(speechConfig, lidConfig, audioCfg)
+    : new SpeechSDK.SpeechRecognizer(speechConfig, langCandidates[0], audioCfg);
+
+  // Phrase list to bias STT toward event terms (names, acronyms, brands):contentReference[oaicite:14]{index=14}:contentReference[oaicite:15]{index=15}
+  const pl = SpeechSDK.PhraseListGrammar.fromRecognizer(recognizer);
+  const terms = (document.getElementById('phrases').value || '').split(',').map(s => s.trim()).filter(Boolean);
+  terms.forEach(t => pl.addPhrase(t));
+
+  recognizer.recognizing = (s, e) => {
+    const text = e.result?.text?.trim();
+    const lang = e.result?.language || langCandidates[0];
+    if (text) {
+      socket.emit('stt-partial', { sessionCode, text, sourceLanguage: lang, t0: Date.now() });
+      log('<span class="partial">P:</span> ' + text);
+    }
+  };
+  recognizer.recognized = (s, e) => {
+    if (e.result?.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
+      const text = e.result?.text?.trim();
+      const lang = e.result?.language || langCandidates[0];
+      if (text) {
+        socket.emit('stt-final', { sessionCode, text, sourceLanguage: lang, t0: Date.now() });
+        log('<b>F:</b> ' + text);
+      }
+    }
+  };
+  recognizer.canceled = (s, e) => log('Canceled: ' + (e.errorDetails || e.reason));
+  recognizer.sessionStarted = () => log('Session started');
+  recognizer.sessionStopped = () => log('Session stopped');
+
+  recognizer.startContinuousRecognitionAsync(); // continuous stream of partial/final events:contentReference[oaicite:16]{index=16}
+}
+
+async function stopSession() {
+  if (!running) return;
+  running = false;
+  document.getElementById('startBtn').disabled = false;
+  document.getElementById('stopBtn').disabled = true;
+  try { recognizer && recognizer.stopContinuousRecognitionAsync(); } catch {}
+}
+</script>
+</body>
+</html>

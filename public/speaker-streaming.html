@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Streaming Speaker - <400ms Translation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .performance-badge {
+            display: inline-block;
+            background: #10b981;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .setup-section {
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        select, input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .language-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .language-chip {
+            padding: 8px 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .language-chip:hover {
+            border-color: #667eea;
+            background: #f3f4f6;
+        }
+
+        .language-chip.selected {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status-section {
+            display: none;
+            text-align: center;
+        }
+
+        .status-section.active {
+            display: block;
+        }
+
+        .session-code {
+            font-size: 48px;
+            font-weight: bold;
+            color: #667eea;
+            letter-spacing: 10px;
+            margin: 20px 0;
+            padding: 20px;
+            background: #f3f4f6;
+            border-radius: 15px;
+        }
+
+        .recording-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            background: #ef4444;
+            color: white;
+            border-radius: 30px;
+            margin: 20px 0;
+            animation: recording-pulse 1.5s infinite;
+        }
+
+        @keyframes recording-pulse {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            }
+            50% {
+                box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+            }
+        }
+
+        .recording-dot {
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .metric-card {
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .latency-good { color: #10b981; }
+        .latency-warning { color: #f59e0b; }
+        .latency-bad { color: #ef4444; }
+
+        .streaming-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+            padding: 10px;
+            background: #f0fdf4;
+            border: 1px solid #86efac;
+            border-radius: 8px;
+            color: #166534;
+            font-size: 14px;
+        }
+
+        .streaming-icon {
+            width: 20px;
+            height: 20px;
+            position: relative;
+        }
+
+        .streaming-icon::before,
+        .streaming-icon::after {
+            content: '';
+            position: absolute;
+            border: 2px solid #10b981;
+            border-radius: 50%;
+            animation: ripple 1.5s infinite;
+        }
+
+        .streaming-icon::before {
+            width: 100%;
+            height: 100%;
+        }
+
+        .streaming-icon::after {
+            width: 100%;
+            height: 100%;
+            animation-delay: 0.5s;
+        }
+
+        @keyframes ripple {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(2);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="setup-section" id="setupSection">
+            <h1>
+                Streaming Speaker
+                <span class="performance-badge">< 400ms</span>
+            </h1>
+            <p class="subtitle">Next-generation simultaneous translation with ultra-low latency</p>
+            
+            <div class="form-group">
+                <label for="sourceLang">Your Language</label>
+                <select id="sourceLang">
+                    <option value="en">English</option>
+                    <option value="es">Spanish</option>
+                    <option value="fr">French</option>
+                    <option value="de">German</option>
+                    <option value="zh">Chinese</option>
+                    <option value="ja">Japanese</option>
+                    <option value="ko">Korean</option>
+                    <option value="pt">Portuguese</option>
+                    <option value="ru">Russian</option>
+                    <option value="ar">Arabic</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Target Languages (select multiple)</label>
+                <div class="language-grid">
+                    <div class="language-chip" data-lang="en">English</div>
+                    <div class="language-chip" data-lang="es">Spanish</div>
+                    <div class="language-chip" data-lang="fr">French</div>
+                    <div class="language-chip" data-lang="de">German</div>
+                    <div class="language-chip" data-lang="zh">Chinese</div>
+                    <div class="language-chip" data-lang="ja">Japanese</div>
+                    <div class="language-chip" data-lang="ko">Korean</div>
+                    <div class="language-chip" data-lang="pt">Portuguese</div>
+                    <div class="language-chip" data-lang="ru">Russian</div>
+                    <div class="language-chip" data-lang="ar">Arabic</div>
+                </div>
+            </div>
+            
+            <button id="startBtn">Start Streaming Session</button>
+        </div>
+        
+        <div class="status-section" id="statusSection">
+            <h1>Streaming Active</h1>
+            <p class="subtitle">Share this code with listeners</p>
+            
+            <div class="session-code" id="sessionCode">----</div>
+            
+            <div class="recording-indicator">
+                <div class="recording-dot"></div>
+                <span>LIVE TRANSLATION</span>
+            </div>
+
+            <div class="streaming-status">
+                <div class="streaming-icon"></div>
+                <span>Streaming with prefix-based translation</span>
+            </div>
+            
+            <div class="metrics">
+                <div class="metric-card">
+                    <div class="metric-value" id="latencyValue">0ms</div>
+                    <div class="metric-label">Latency</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="segmentsValue">0</div>
+                    <div class="metric-label">Segments</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="listenersValue">0</div>
+                    <div class="metric-label">Listeners</div>
+                </div>
+            </div>
+            
+            <button id="stopBtn" style="margin-top: 30px; background: #ef4444;">Stop Session</button>
+        </div>
+    </div>
+
+    <!-- Load SDK and Socket.IO -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/sdk-loader.js"></script>
+    
+    <script>
+        let socket = null;
+        let sessionCode = null;
+        let recognition = null;
+        let selectedLanguages = new Set();
+        let currentSourceLang = 'en';
+        let currentTargetLangs = [];
+        let metrics = {
+            segments: 0,
+            totalLatency: 0,
+            listeners: 0
+        };
+
+        // Language chip selection
+        document.querySelectorAll('.language-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                const lang = chip.dataset.lang;
+                const sourceLang = document.getElementById('sourceLang').value;
+                
+                // Can't select source language as target
+                if (lang === sourceLang) {
+                    alert("Can't select source language as target");
+                    return;
+                }
+                
+                chip.classList.toggle('selected');
+                if (chip.classList.contains('selected')) {
+                    selectedLanguages.add(lang);
+                } else {
+                    selectedLanguages.delete(lang);
+                }
+            });
+        });
+
+        // Update available target languages when source changes
+        document.getElementById('sourceLang').addEventListener('change', (e) => {
+            const sourceLang = e.target.value;
+            document.querySelectorAll('.language-chip').forEach(chip => {
+                if (chip.dataset.lang === sourceLang) {
+                    chip.classList.remove('selected');
+                    selectedLanguages.delete(chip.dataset.lang);
+                }
+            });
+        });
+
+        // Start session
+        document.getElementById('startBtn').addEventListener('click', async () => {
+            if (selectedLanguages.size === 0) {
+                alert('Please select at least one target language');
+                return;
+            }
+
+            const sourceLang = document.getElementById('sourceLang').value;
+            const targetLangs = Array.from(selectedLanguages);
+            
+            // Store current languages globally
+            currentSourceLang = sourceLang;
+            currentTargetLangs = targetLangs;
+            
+            // Generate session code
+            sessionCode = generateSessionCode();
+            document.getElementById('sessionCode').textContent = sessionCode;
+            
+            // Connect to streaming server
+            socket = io({
+                transports: ['websocket'] // Force WebSocket for lower latency
+            });
+            
+            socket.on('connect', () => {
+                console.log('Connected to streaming server');
+                
+                // Join as streaming speaker
+                socket.emit('streaming-speaker-join', {
+                    sessionCode,
+                    sourceLang,
+                    targetLangs
+                });
+            });
+            
+            socket.on('joined', (data) => {
+                if (data.ok) {
+                    console.log('Session started:', data);
+                    startStreamingRecognition(sourceLang, targetLangs);
+                    
+                    // Switch UI
+                    document.getElementById('setupSection').classList.remove('active');
+                    document.getElementById('setupSection').style.display = 'none';
+                    document.getElementById('statusSection').classList.add('active');
+                }
+            });
+            
+            // Handle metrics updates
+            socket.on('metrics', (data) => {
+                updateMetrics(data);
+            });
+            
+            // Handle listener count
+            socket.on('listener-joined', () => {
+                metrics.listeners++;
+                updateDisplay();
+            });
+            
+            socket.on('listener-left', () => {
+                metrics.listeners = Math.max(0, metrics.listeners - 1);
+                updateDisplay();
+            });
+        });
+
+        // Start streaming recognition with Azure SDK
+        async function startStreamingRecognition(sourceLang, targetLangs) {
+            try {
+                await window.ensureSDKLoaded();
+                
+                // Fetch speech config from server
+                const configResponse = await fetch('/speech-config');
+                const config = await configResponse.json();
+                
+                // Configure for streaming translation
+                const speechConfig = SpeechSDK.SpeechTranslationConfig.fromSubscription(
+                    config.key,
+                    config.region
+                );
+                
+                // Map short codes to Azure locale codes for recognition
+                const langMap = {
+                    'en': 'en-US',
+                    'es': 'es-ES',
+                    'fr': 'fr-FR',
+                    'de': 'de-DE',
+                    'zh': 'zh-CN',  // Changed from zh-Hans
+                    'ja': 'ja-JP',
+                    'ko': 'ko-KR',
+                    'pt': 'pt-BR',
+                    'ru': 'ru-RU',
+                    'ar': 'ar-SA'
+                };
+                
+                // Set source language FIRST
+                const sourceAzureCode = langMap[sourceLang] || 'en-US';
+                speechConfig.speechRecognitionLanguage = sourceAzureCode;
+                console.log(`Source language set to: ${sourceLang} -> ${sourceAzureCode}`);
+                
+                // Add target languages - use simple codes like the test page
+                targetLangs.forEach(lang => {
+                    // Use simple language codes for translation targets
+                    speechConfig.addTargetLanguage(lang);
+                    console.log(`Added target language: ${lang}`);
+                });
+                
+                // Enable partial results for streaming
+                speechConfig.enableDictation();
+                
+                const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+                recognition = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
+                
+                console.log('TranslationRecognizer created with config:', {
+                    source: sourceAzureCode,
+                    targets: targetLangs
+                });
+                
+                // Handle streaming translations
+                recognition.recognizing = (s, e) => {
+                    const reasonName = Object.keys(SpeechSDK.ResultReason).find(key => 
+                        SpeechSDK.ResultReason[key] === e.result.reason) || 'Unknown';
+                    console.log(`Recognizing event [${reasonName}]:`, e.result.text);
+                    
+                    // Check if translations exist
+                    if (e.result.translations && e.result.translations.size > 0) {
+                        console.log('✅ Translations found:');
+                        e.result.translations.forEach((value, key) => {
+                            console.log(`  [${key}]: ${value}`);
+                        });
+                        // Process translation regardless of reason
+                        handleStreamingTranslation(e.result, false);
+                    } else {
+                        console.log('⚠️ No translations in recognizing event');
+                        // Still send the original text
+                        if (e.result.text) {
+                            handleStreamingTranslation(e.result, false);
+                        }
+                    }
+                };
+                
+                recognition.recognized = (s, e) => {
+                    const reasonName = Object.keys(SpeechSDK.ResultReason).find(key => 
+                        SpeechSDK.ResultReason[key] === e.result.reason) || 'Unknown';
+                    console.log(`Recognized event [${reasonName}]:`, e.result.text);
+                    
+                    // Check if translations exist
+                    if (e.result.translations && e.result.translations.size > 0) {
+                        console.log('✅ Translations found:');
+                        e.result.translations.forEach((value, key) => {
+                            console.log(`  [${key}]: ${value}`);
+                        });
+                        // Process translation
+                        handleStreamingTranslation(e.result, true);
+                    } else if (e.result.reason === SpeechSDK.ResultReason.NoMatch) {
+                        console.log('No speech detected');
+                    } else if (e.result.text) {
+                        console.log('⚠️ No translations in recognized event, using original');
+                        // Still send the original text
+                        handleStreamingTranslation(e.result, true);
+                    }
+                };
+                
+                recognition.canceled = (s, e) => {
+                    console.error('Recognition canceled:', e.errorDetails);
+                    alert('Recognition stopped: ' + e.errorDetails);
+                };
+                
+                recognition.sessionStarted = (s, e) => {
+                    console.log('Session started:', e.sessionId);
+                };
+                
+                recognition.speechStartDetected = (s, e) => {
+                    console.log('Speech start detected');
+                };
+                
+                // Start continuous recognition
+                recognition.startContinuousRecognitionAsync(
+                    () => console.log('Streaming recognition started'),
+                    (err) => console.error('Failed to start:', err)
+                );
+                
+            } catch (error) {
+                console.error('Failed to start recognition:', error);
+                alert('Failed to start streaming. Please check your microphone permissions.');
+            }
+        }
+
+        // Handle streaming translation
+        function handleStreamingTranslation(result, isFinal) {
+            if (!result.text) return;
+            
+            const timestamp = Date.now();
+            
+            // Don't send translations from client - let server handle everything
+            // This ensures punctuation helper is applied before translation
+            
+            // Send to server via WebSocket
+            if (socket && socket.connected) {
+                const data = {
+                    sessionCode,
+                    original: result.text,
+                    translations: {}, // Empty - server will translate with punctuation
+                    isFinal,
+                    timestamp,
+                    offset: result.offset,
+                    duration: result.duration
+                };
+                
+                console.log(`→ Sending to server for punctuation & translation: "${result.text.substring(0, 30)}..." (${isFinal ? 'final' : 'partial'})`);
+                socket.emit('translation-stream', data);
+                
+                // Update metrics
+                if (isFinal) {
+                    metrics.segments++;
+                    updateDisplay();
+                }
+            } else {
+                console.error('❌ Socket not connected!');
+            }
+        }
+
+        // Stop session
+        document.getElementById('stopBtn').addEventListener('click', () => {
+            if (recognition) {
+                recognition.stopContinuousRecognitionAsync(
+                    () => console.log('Recognition stopped'),
+                    (err) => console.error('Failed to stop:', err)
+                );
+                recognition.close();
+            }
+            
+            if (socket) {
+                socket.disconnect();
+            }
+            
+            // Reset UI
+            document.getElementById('statusSection').classList.remove('active');
+            document.getElementById('setupSection').style.display = 'block';
+            selectedLanguages.clear();
+            document.querySelectorAll('.language-chip').forEach(chip => {
+                chip.classList.remove('selected');
+            });
+        });
+
+        // Update metrics display
+        function updateMetrics(data) {
+            if (data.avgLatency !== undefined) {
+                metrics.totalLatency = data.avgLatency;
+                updateDisplay();
+            }
+        }
+
+        function updateDisplay() {
+            // Update latency with color coding
+            const latencyEl = document.getElementById('latencyValue');
+            const latency = Math.round(metrics.totalLatency);
+            latencyEl.textContent = `${latency}ms`;
+            
+            // Color code based on performance
+            latencyEl.className = 'metric-value';
+            if (latency <= 400) {
+                latencyEl.classList.add('latency-good');
+            } else if (latency <= 600) {
+                latencyEl.classList.add('latency-warning');
+            } else {
+                latencyEl.classList.add('latency-bad');
+            }
+            
+            document.getElementById('segmentsValue').textContent = metrics.segments;
+            document.getElementById('listenersValue').textContent = metrics.listeners;
+        }
+
+        // Generate random 4-letter session code
+        function generateSessionCode() {
+            const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            let code = '';
+            for (let i = 0; i < 4; i++) {
+                code += letters[Math.floor(Math.random() * letters.length)];
+            }
+            return code;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Listener – Azure S2S</title>
+  <link rel="stylesheet" href="./style.css"/>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <!-- Microsoft Cognitive Services Speech SDK -->
+  <script src="https://aka.ms/csspeech/jsbrowserpackage"></script>
+</head>
+<body>
+  <h1>Listener</h1>
+  <div class="row">
+    <label>Session code</label>
+    <input id="code" maxlength="4" placeholder="ABCD" style="text-transform:uppercase"/>
+    <label>Language</label>
+    <select id="lang">
+      <option value="en-US">English</option>
+      <option value="fr-CA">Français (Canada)</option>
+      <option value="es">Español</option>
+      <option value="de">Deutsch</option>
+    </select>
+    <button id="joinBtn">Join</button>
+    <button id="leaveBtn" disabled>Leave</button>
+    <span class="badge" id="status">disconnected</span>
+  </div>
+
+  <div class="log" id="subs"></div>
+
+<script>
+const subs = document.getElementById('subs');
+const append = (html) => subs.innerHTML += html + '<br/>';
+let socket, synthesizer, ttsReady = false, autoPlay = true;
+
+document.getElementById('joinBtn').onclick = join;
+document.getElementById('leaveBtn').onclick = leave;
+
+async function setupSynth(targetLang) {
+  const tok = await fetch('/api/speech/token').then(r => r.json());
+  const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(tok.token, tok.region);
+  // Favor compressed output for faster start on mobile:contentReference[oaicite:24]{index=24}:contentReference[oaicite:25]{index=25}
+  speechConfig.speechSynthesisOutputFormat = SpeechSDK.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3;
+
+  // Pick a neural voice per language (server can expose the mapping if you prefer)
+  const voiceMap = {
+    'en-US': 'en-US-JennyNeural',
+    'fr-CA': 'fr-CA-SylvieNeural',
+    'es': 'es-ES-ElviraNeural',
+    'de': 'de-DE-KatjaNeural'
+  };
+  speechConfig.speechSynthesisVoiceName = voiceMap[targetLang] || 'en-US-JennyNeural';
+
+  const audioConfig = SpeechSDK.AudioConfig.fromDefaultSpeakerOutput();
+  synthesizer = new SpeechSDK.SpeechSynthesizer(speechConfig, audioConfig);
+  ttsReady = true;
+}
+
+const queue = [];
+let speaking = false;
+const COMMIT_MS = 250; // small window to reduce “walk-backs” on partials
+
+function enqueue(text) {
+  queue.push(text);
+  if (!speaking) speakNext();
+}
+function speakNext() {
+  if (!ttsReady || speaking || queue.length === 0) return;
+  speaking = true;
+  const text = queue.shift();
+  synthesizer.speakTextAsync(text, () => {
+    speaking = false; speakNext();
+  }, (e) => {
+    console.error('TTS err', e); speaking = false; speakNext();
+  });
+}
+
+async function join() {
+  const code = document.getElementById('code').value.trim().toUpperCase();
+  const lang = document.getElementById('lang').value;
+  if (code.length !== 4) { alert('Need 4-char code'); return; }
+  await setupSynth(lang);
+
+  socket = io();
+  socket.on('connect', () => { document.getElementById('status').innerText = 'connected'; });
+  socket.on('disconnect', () => { document.getElementById('status').innerText = 'disconnected'; });
+
+  socket.emit('listener-join', { sessionCode: code, targetLanguage: lang });
+
+  let lastPartial = '', commitTimer = null;
+
+  socket.on('translation-partial', (d) => {
+    // Show as subtitles immediately; only queue for TTS after brief commit window
+    const line = `<span class="partial">${d.translation}</span>`;
+    append(line);
+
+    if (!autoPlay) return;
+    clearTimeout(commitTimer);
+    commitTimer = setTimeout(() => {
+      // Only speak if changed significantly
+      if (d.translation && d.translation !== lastPartial) {
+        enqueue(d.translation);
+        lastPartial = d.translation;
+      }
+    }, COMMIT_MS);
+  });
+
+  socket.on('translation-final', (d) => {
+    append(`<b>${d.translation}</b>`);
+    if (autoPlay) enqueue(d.translation);
+    lastPartial = '';
+  });
+
+  document.getElementById('joinBtn').disabled = true;
+  document.getElementById('leaveBtn').disabled = false;
+}
+
+function leave() {
+  if (socket) socket.disconnect();
+  if (synthesizer) synthesizer.close();
+  ttsReady = false;
+  document.getElementById('joinBtn').disabled = false;
+  document.getElementById('leaveBtn').disabled = true;
+  document.getElementById('status').innerText = 'disconnected';
+}
+</script>
+</body>
+</html>

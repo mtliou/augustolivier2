@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Streaming Listener - <400ms Translation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .performance-badge {
+            display: inline-block;
+            background: #10b981;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .join-section {
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        input[type="text"] {
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .listening-section {
+            display: none;
+            text-align: center;
+        }
+
+        .listening-section.active {
+            display: block;
+        }
+
+        .session-info {
+            background: #f9fafb;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .session-code-display {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+            letter-spacing: 8px;
+            margin: 10px 0;
+        }
+
+        .translation-display {
+            background: #f3f4f6;
+            border-radius: 15px;
+            padding: 20px;
+            min-height: 150px;
+            margin-bottom: 20px;
+        }
+
+        .current-translation {
+            font-size: 18px;
+            line-height: 1.6;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .current-translation.partial {
+            color: #9ca3af;
+            font-style: italic;
+        }
+
+        .translation-history {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            background: white;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .streaming-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            background: #10b981;
+            color: white;
+            border-radius: 30px;
+            margin: 20px 0;
+            animation: streaming-pulse 1.5s infinite;
+        }
+
+        @keyframes streaming-pulse {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            }
+            50% {
+                box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+            }
+        }
+
+        .streaming-dot {
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .metric-card {
+            padding: 12px;
+            background: white;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid #e5e7eb;
+        }
+
+        .metric-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .metric-label {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .latency-good { color: #10b981; }
+        .latency-warning { color: #f59e0b; }
+        .latency-bad { color: #ef4444; }
+
+        .volume-control {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 10px;
+        }
+
+        .volume-slider {
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .language-selector {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .lang-option {
+            padding: 8px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .lang-option:hover {
+            border-color: #667eea;
+            background: #f3f4f6;
+        }
+
+        .lang-option.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .error-message {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .audio-queue-status {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .queue-indicator {
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="join-section" id="joinSection">
+            <h1>
+                Streaming Listener
+                <span class="performance-badge">< 400ms</span>
+            </h1>
+            <p class="subtitle">Real-time translation with ultra-low latency</p>
+            
+            <div class="error-message" id="errorMessage"></div>
+            
+            <div class="form-group">
+                <label for="sessionCode">Session Code</label>
+                <input type="text" id="sessionCode" maxlength="4" placeholder="ABCD" autocomplete="off">
+            </div>
+            
+            <div class="form-group">
+                <label for="preferredLang">Preferred Language</label>
+                <select id="preferredLang">
+                    <option value="">Select after joining...</option>
+                </select>
+            </div>
+            
+            <button id="joinBtn">Join Session</button>
+        </div>
+        
+        <div class="listening-section" id="listeningSection">
+            <h1>Live Translation</h1>
+            <p class="subtitle">Streaming simultaneous translation</p>
+            
+            <div class="session-info">
+                <div>Session Code</div>
+                <div class="session-code-display" id="sessionCodeDisplay">----</div>
+                <div class="language-selector" id="languageSelector"></div>
+            </div>
+            
+            <div class="streaming-indicator">
+                <div class="streaming-dot"></div>
+                <span>RECEIVING TRANSLATION</span>
+            </div>
+            
+            <div class="translation-display">
+                <div class="current-translation" id="currentTranslation">
+                    Waiting for speaker to start...
+                </div>
+                <div class="audio-queue-status">
+                    <div class="queue-indicator"></div>
+                    <span id="queueStatus">Audio ready</span>
+                </div>
+            </div>
+            
+            <div class="metrics">
+                <div class="metric-card">
+                    <div class="metric-value" id="latencyValue">0ms</div>
+                    <div class="metric-label">Latency</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="segmentsValue">0</div>
+                    <div class="metric-label">Segments</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="confidenceValue">0%</div>
+                    <div class="metric-label">Confidence</div>
+                </div>
+            </div>
+            
+            <div class="volume-control">
+                <label for="volumeSlider">Volume</label>
+                <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="80">
+            </div>
+            
+            <div class="audio-control" style="margin-top: 15px;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" id="enableAudio" checked style="width: 20px; height: 20px;">
+                    <span id="audioStatusText">🎵 Auto-Play Ready</span>
+                </label>
+                <button id="testAudio" style="margin-top: 10px; padding: 8px 16px; background: #10b981; font-weight: bold;">✅ Audio Enabled</button>
+                <div id="audioStatus" style="margin-top: 10px; padding: 10px; background: #fef3c7; border-radius: 8px; display: none;">
+                    <strong>⚠️ Audio Blocked:</strong> Click the button above or anywhere on the page to enable audio.
+                </div>
+            </div>
+            
+            <div class="translation-history">
+                <h3 style="margin-bottom: 10px; font-size: 16px;">History</h3>
+                <div id="historyContainer"></div>
+            </div>
+            
+            <button id="leaveBtn" style="margin-top: 20px; background: #ef4444;">Leave Session</button>
+        </div>
+    </div>
+
+    <!-- Load Socket.IO -->
+    <script src="/socket.io/socket.io.js"></script>
+    
+    <script>
+        let socket = null;
+        let sessionCode = null;
+        let currentLanguage = null;
+        let availableLanguages = [];
+        let audioQueue = [];
+        let isPlaying = false;
+        let audioUnlocked = false;
+        let metrics = {
+            segments: 0,
+            totalLatency: 0,
+            avgConfidence: 0
+        };
+
+        // Session code input formatting
+        document.getElementById('sessionCode').addEventListener('input', (e) => {
+            e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '');
+            
+            if (e.target.value.length === 4) {
+                document.getElementById('joinBtn').disabled = false;
+            } else {
+                document.getElementById('joinBtn').disabled = true;
+            }
+        });
+
+        // Join session - AUTO-UNLOCK AUDIO ON JOIN
+        document.getElementById('joinBtn').addEventListener('click', async () => {
+            const code = document.getElementById('sessionCode').value;
+            if (code.length !== 4) {
+                showError('Please enter a 4-letter session code');
+                return;
+            }
+            
+            sessionCode = code;
+            
+            // Auto-unlock audio when joining session
+            document.getElementById('enableAudio').checked = true; // Pre-enable
+            setTimeout(async () => {
+                await unlockAudio();
+            }, 100);
+            
+            connectToSession();
+        });
+
+        // Connect to streaming session
+        function connectToSession() {
+            socket = io({
+                transports: ['websocket'] // Force WebSocket for lower latency
+            });
+            
+            socket.on('connect', () => {
+                console.log('Connected to server');
+                
+                // Get preferred language from dropdown
+                const preferredLang = document.getElementById('preferredLang').value;
+                
+                // Only join with a language if one was selected
+                if (preferredLang && preferredLang !== '') {
+                    currentLanguage = preferredLang;
+                    console.log('Joining as listener with pre-selected language:', preferredLang);
+                    
+                    socket.emit('streaming-listener-join', {
+                        sessionCode: sessionCode,
+                        preferredLanguage: preferredLang
+                    });
+                } else {
+                    // Join without language preference, will select after
+                    console.log('Joining as listener without language preference');
+                    
+                    socket.emit('streaming-listener-join', {
+                        sessionCode: sessionCode,
+                        preferredLanguage: null  // Don't default to Spanish!
+                    });
+                }
+            });
+            
+            socket.on('joined', (data) => {
+                if (data.ok) {
+                    console.log('Joined session:', data);
+                    availableLanguages = data.availableLanguages || ['es', 'fr'];
+                    setupLanguageSelector();
+                    
+                    // Switch UI
+                    document.getElementById('joinSection').style.display = 'none';
+                    document.getElementById('listeningSection').classList.add('active');
+                    document.getElementById('sessionCodeDisplay').textContent = sessionCode;
+                    
+                    hideError();
+                } else {
+                    showError('Failed to join session');
+                }
+            });
+            
+            socket.on('session-not-found', () => {
+                showError('Session not found. Please check the code.');
+                socket.disconnect();
+            });
+            
+            // Listen for both old and new translation events
+            socket.on('translation-stream', (data) => {
+                handleTranslation(data);
+            });
+            
+            socket.on('translation-broadcast', (data) => {
+                // Handle new broadcast format with all translations
+                if (data.translations && currentLanguage && data.translations[currentLanguage]) {
+                    handleTranslation({
+                        text: data.translations[currentLanguage],
+                        original: data.original,
+                        language: currentLanguage,
+                        isFinal: data.isFinal,
+                        latency: data.latency,
+                        timestamp: data.timestamp
+                    });
+                }
+            });
+            
+            socket.on('audio-stream', (data) => {
+                console.log('Audio received:', data.language);
+                if (data.audio) {
+                    // Auto-enable audio on first audio received
+                    if (!audioUnlocked) {
+                        document.getElementById('enableAudio').checked = true;
+                    }
+                    playAudioFromBase64(data.audio, data.format || 'mp3');
+                }
+            });
+            
+            socket.on('speaker-disconnected', () => {
+                showError('Speaker has left the session');
+                document.getElementById('currentTranslation').textContent = 'Speaker disconnected';
+            });
+            
+            socket.on('error', (error) => {
+                console.error('Socket error:', error);
+                showError('Connection error. Please try again.');
+            });
+            
+            socket.on('disconnect', () => {
+                console.log('Disconnected from server');
+            });
+        }
+
+        // Setup language selector
+        function setupLanguageSelector() {
+            const selector = document.getElementById('languageSelector');
+            const preferredSelect = document.getElementById('preferredLang');
+            
+            selector.innerHTML = '';
+            preferredSelect.innerHTML = '';
+            
+            availableLanguages.forEach(lang => {
+                // Create button for active session
+                const btn = document.createElement('div');
+                btn.className = 'lang-option';
+                btn.textContent = getLanguageName(lang);
+                btn.dataset.lang = lang;
+                
+                // Only set first language as default if no preference was given
+                if (!currentLanguage && selector.children.length === 0) {
+                    currentLanguage = lang;
+                    btn.classList.add('active');
+                    // Immediately notify server of selection
+                    setTimeout(() => selectLanguage(lang), 100);
+                } else if (currentLanguage === lang) {
+                    btn.classList.add('active');
+                }
+                
+                btn.addEventListener('click', () => {
+                    selectLanguage(lang);
+                });
+                
+                selector.appendChild(btn);
+                
+                // Add to dropdown for join section
+                const option = document.createElement('option');
+                option.value = lang;
+                option.textContent = getLanguageName(lang);
+                preferredSelect.appendChild(option);
+            });
+        }
+
+        // Select language
+        function selectLanguage(lang) {
+            currentLanguage = lang;
+            console.log('Language selected:', lang);
+            
+            // Update UI
+            document.querySelectorAll('.lang-option').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.lang === lang);
+            });
+            
+            // Update displayed language in header
+            const langDisplay = document.querySelector('.session-info');
+            if (langDisplay) {
+                const langName = getLanguageName(lang);
+                // Update the language indicator
+                const indicator = langDisplay.querySelector('.language-indicator') || document.createElement('div');
+                indicator.className = 'language-indicator';
+                indicator.textContent = `Listening in: ${langName}`;
+                indicator.style.marginTop = '10px';
+                indicator.style.color = '#667eea';
+                indicator.style.fontWeight = 'bold';
+                if (!langDisplay.contains(indicator)) {
+                    langDisplay.appendChild(indicator);
+                }
+            }
+            
+            // Notify server to change language stream
+            if (socket) {
+                socket.emit('change-language', { 
+                    sessionCode: sessionCode,
+                    language: lang 
+                });
+                console.log('Requested language change to:', lang);
+            }
+        }
+
+        // Handle incoming translation
+        function handleTranslation(data) {
+            metrics.segments++;
+            
+            // Update text display
+            const translationEl = document.getElementById('currentTranslation');
+            translationEl.textContent = data.text || 'Processing...';
+            translationEl.className = data.isFinal ? 'current-translation' : 'current-translation partial';
+            
+            // Add to history if final
+            if (data.isFinal) {
+                addToHistory(data.text);
+            }
+            
+            // Update metrics
+            if (data.latency) {
+                metrics.totalLatency += data.latency;
+                updateLatencyDisplay(data.latency);
+            }
+            
+            if (data.confidence) {
+                updateConfidenceDisplay(data.confidence);
+            }
+            
+            document.getElementById('segmentsValue').textContent = metrics.segments;
+            
+            // Handle audio if provided
+            if (data.audio) {
+                queueAudio(data.audio);
+            }
+        }
+
+        // Queue audio for playback - ATTEMPT IMMEDIATE PLAYBACK
+        function queueAudio(audioData) {
+            audioQueue.push(audioData);
+            console.log(`Audio queued. Total in queue: ${audioQueue.length}`);
+            
+            // ALWAYS try to play, don't wait for unlock
+            if (!isPlaying && audioQueue.length > 0) {
+                // Attempt immediate playback - this will auto-unlock on success
+                playNextAudio().catch(err => {
+                    console.log('First play attempt blocked, showing UI prompt');
+                    // Only show warning if truly blocked
+                    if (!audioUnlocked) {
+                        document.getElementById('audioStatus').style.display = 'block';
+                        document.getElementById('queueStatus').textContent = `⚠️ Click anywhere to play ${audioQueue.length} audio segments`;
+                        document.getElementById('queueStatus').style.background = '#fbbf24';
+                        document.getElementById('queueStatus').style.color = '#92400e';
+                        document.getElementById('queueStatus').style.cursor = 'pointer';
+                        document.getElementById('queueStatus').style.padding = '10px';
+                        document.getElementById('queueStatus').style.borderRadius = '8px';
+                        document.getElementById('queueStatus').style.fontWeight = 'bold';
+                    }
+                });
+            } else {
+                document.getElementById('queueStatus').textContent = `Queue: ${audioQueue.length}`;
+            }
+        }
+
+        // Play next audio segment - AGGRESSIVE AUTOPLAY
+        async function playNextAudio() {
+            if (audioQueue.length === 0) {
+                isPlaying = false;
+                document.getElementById('queueStatus').textContent = 'Audio ready';
+                return;
+            }
+            
+            // Don't check for checkbox initially - try to play first
+            isPlaying = true;
+            const audioData = audioQueue.shift();
+            
+            try {
+                // Ensure we have a proper data URL
+                let audioUrl = audioData;
+                if (!audioData.startsWith('data:')) {
+                    audioUrl = `data:audio/mp3;base64,${audioData}`;
+                }
+                
+                const audio = new Audio(audioUrl);
+                audio.volume = globalVolume;
+                
+                audio.onended = () => {
+                    playNextAudio(); // Play next in queue
+                };
+                
+                audio.onerror = (e) => {
+                    console.error('Audio error:', e);
+                    isPlaying = false;
+                    if (audioQueue.length > 0) {
+                        setTimeout(() => playNextAudio(), 100);
+                    }
+                };
+                
+                const playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    await playPromise;
+                    
+                    // Mark audio as unlocked on first successful play
+                    if (!audioUnlocked) {
+                        audioUnlocked = true;
+                        console.log('✅ Audio unlocked via playback!');
+                        document.getElementById('audioStatus').style.display = 'none';
+                        document.getElementById('audioStatusText').textContent = '🔊 Audio Playing';
+                        document.getElementById('testAudio').textContent = '✅ Audio Active';
+                        document.getElementById('testAudio').style.background = '#10b981';
+                    }
+                    
+                    document.getElementById('queueStatus').textContent = `Playing (${audioQueue.length} in queue)`;
+                    document.getElementById('queueStatus').style.background = '#10b981';
+                    document.getElementById('queueStatus').style.color = 'white';
+                }
+            } catch (error) {
+                console.error('Audio playback error:', error);
+                isPlaying = false;
+                
+                if (error.name === 'NotAllowedError' && !audioUnlocked) {
+                    // Need user interaction
+                    document.getElementById('audioStatus').style.display = 'block';
+                    document.getElementById('queueStatus').textContent = `⚠️ ${audioQueue.length + 1} audio segments waiting`;
+                    document.getElementById('queueStatus').style.background = '#fbbf24';
+                    document.getElementById('queueStatus').style.color = '#92400e';
+                    // Re-queue the audio
+                    audioQueue.unshift(audioData);
+                } else {
+                    // Other error, try next
+                    if (audioQueue.length > 0) {
+                        setTimeout(() => playNextAudio(), 100);
+                    }
+                }
+            }
+        }
+
+        // Add to history
+        function addToHistory(text) {
+            const container = document.getElementById('historyContainer');
+            const item = document.createElement('div');
+            item.className = 'history-item';
+            item.textContent = text;
+            
+            container.insertBefore(item, container.firstChild);
+            
+            // Keep only last 10 items
+            while (container.children.length > 10) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        // Play audio from base64
+        function playAudioFromBase64(base64Audio, format = 'mp3') {
+            try {
+                // Create audio URL from base64
+                const audioUrl = `data:audio/${format};base64,${base64Audio}`;
+                
+                // Add to queue or play directly
+                if (document.getElementById('enableAudio').checked) {
+                    queueAudio(audioUrl);
+                } else {
+                    console.log('Audio playback disabled');
+                }
+            } catch (error) {
+                console.error('Failed to process audio:', error);
+                // Try to auto-enable on user interaction
+                if (error.name === 'NotAllowedError') {
+                    showError('Click "Test Audio" to enable audio playback');
+                }
+            }
+        }
+
+        // Update latency display
+        function updateLatencyDisplay(latency) {
+            const el = document.getElementById('latencyValue');
+            el.textContent = `${Math.round(latency)}ms`;
+            
+            el.className = 'metric-value';
+            if (latency <= 400) {
+                el.classList.add('latency-good');
+            } else if (latency <= 600) {
+                el.classList.add('latency-warning');
+            } else {
+                el.classList.add('latency-bad');
+            }
+        }
+
+        // Update confidence display
+        function updateConfidenceDisplay(confidence) {
+            const percent = Math.round(confidence * 100);
+            document.getElementById('confidenceValue').textContent = `${percent}%`;
+        }
+
+        // Volume control
+        let globalVolume = 0.8;
+        document.getElementById('volumeSlider').addEventListener('input', (e) => {
+            globalVolume = e.target.value / 100;
+            // Will apply to next audio played
+        });
+        
+        // Audio unlock functionality - AUTO-UNLOCK on first interaction
+        async function unlockAudio() {
+            if (audioUnlocked) return true;
+            
+            console.log('Attempting audio unlock...');
+            
+            // Try silent audio first for immediate unlock
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAAAAAAA=');
+                audio.volume = 0.01;
+                await audio.play();
+                
+                audioUnlocked = true;
+                console.log('✅ Audio unlocked!');
+                document.getElementById('audioStatus').style.display = 'none';
+                document.getElementById('testAudio').textContent = '✅ Audio Enabled';
+                document.getElementById('testAudio').style.background = '#10b981';
+                document.getElementById('enableAudio').checked = true; // Auto-enable
+                
+                // If we have queued audio, start playing immediately
+                if (audioQueue.length > 0 && !isPlaying) {
+                    console.log('Starting queued audio playback...');
+                    playNextAudio();
+                }
+                
+                return true;
+            } catch (e) {
+                console.log('Audio blocked, will retry on next interaction');
+                audioUnlocked = false;
+                return false;
+            }
+        }
+        
+        // Single click handler for audio unlock
+        async function handleUserInteraction(source) {
+            console.log(`User interaction from: ${source}`);
+            if (!audioUnlocked) {
+                const unlocked = await unlockAudio();
+                if (unlocked) {
+                    console.log('Audio playback enabled!');
+                }
+            }
+        }
+        
+        // Test Audio button - more aggressive approach
+        document.getElementById('testAudio').addEventListener('click', async function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            console.log('Test Audio button clicked');
+            
+            // Force unlock attempt
+            audioUnlocked = false; // Reset to force new attempt
+            const unlocked = await unlockAudio();
+            
+            if (unlocked) {
+                this.textContent = '✅ Audio Enabled';
+                this.style.background = '#10b981';
+            } else {
+                this.textContent = '❌ Try Again';
+                this.style.background = '#ef4444';
+            }
+        });
+        
+        // Add click handler to queue status
+        document.getElementById('queueStatus').addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (!audioUnlocked && audioQueue.length > 0) {
+                handleUserInteraction('queue');
+            }
+        });
+        
+        // Add AGGRESSIVE page-wide interaction handlers
+        const autoUnlockHandlers = ['click', 'keydown', 'touchstart', 'mousedown'];
+        autoUnlockHandlers.forEach(eventType => {
+            document.addEventListener(eventType, async () => {
+                if (!audioUnlocked && audioQueue.length > 0) {
+                    console.log(`Auto-unlock attempt via ${eventType}`);
+                    audioUnlocked = true; // Optimistically set
+                    document.getElementById('enableAudio').checked = true;
+                    await playNextAudio();
+                }
+            }, { capture: true }); // Use capture phase for earlier handling
+        });
+
+        // Leave session
+        document.getElementById('leaveBtn').addEventListener('click', () => {
+            if (socket) {
+                socket.emit('listener-leave', { sessionCode });
+                socket.disconnect();
+            }
+            
+            // Reset UI
+            document.getElementById('listeningSection').classList.remove('active');
+            document.getElementById('joinSection').style.display = 'block';
+            document.getElementById('sessionCode').value = '';
+            document.getElementById('joinBtn').disabled = true;
+            
+            // Clear data
+            audioQueue = [];
+            metrics = { segments: 0, totalLatency: 0, avgConfidence: 0 };
+            document.getElementById('historyContainer').innerHTML = '';
+        });
+
+        // Helper functions
+        function getLanguageName(code) {
+            const languages = {
+                'en': 'English',
+                'es': 'Spanish',
+                'fr': 'French',
+                'de': 'German',
+                'zh': 'Chinese',
+                'ja': 'Japanese',
+                'ko': 'Korean',
+                'pt': 'Portuguese',
+                'ru': 'Russian',
+                'ar': 'Arabic'
+            };
+            return languages[code] || code.toUpperCase();
+        }
+
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = message;
+            errorEl.classList.add('show');
+        }
+
+        function hideError() {
+            document.getElementById('errorMessage').classList.remove('show');
+        }
+
+        // Allow Enter key to join
+        document.getElementById('sessionCode').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && e.target.value.length === 4) {
+                document.getElementById('joinBtn').click();
+            }
+        });
+    </script>
+</body>
+</html>
