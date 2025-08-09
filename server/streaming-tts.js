@@ -56,6 +56,7 @@ export class StreamingTTS extends EventEmitter {
    * Initialize Azure Cognitive Services TTS for streaming
    */
   async initializeAzureTTS() {
+    this.azureReady = false;
     try {
       if (typeof window !== 'undefined' && window.SpeechSDK) {
         this.SpeechSDK = window.SpeechSDK;
@@ -64,34 +65,42 @@ export class StreamingTTS extends EventEmitter {
         this.SpeechSDK = sdk.default || sdk;
       }
     } catch (error) {
-      console.warn('Azure Speech SDK not available, using fallback');
+      console.warn('Azure Speech SDK not available in this environment:', error?.message || error);
       this.SpeechSDK = null;
       return;
     }
-    
-    // Configure for streaming synthesis
-    this.speechConfig = this.SpeechSDK.SpeechConfig.fromSubscription(
-      process.env.SPEECH_KEY,
-      process.env.SPEECH_REGION
-    );
-    
-    // Ultra-fast neural voices for low latency
-    this.voiceMap = {
-      'en': 'en-US-JennyNeural',
-      'es': 'es-ES-AlvaroNeural',
-      'fr': 'fr-FR-DeniseNeural',
-      'de': 'de-DE-ConradNeural',
-      'zh': 'zh-CN-XiaoxiaoNeural',
-      'ja': 'ja-JP-NanamiNeural',
-      'ko': 'ko-KR-SunHiNeural',
-      'pt': 'pt-BR-FranciscaNeural',
-      'ru': 'ru-RU-DariyaNeural',
-      'ar': 'ar-SA-ZariyahNeural'
-    };
-    
-    // Set synthesis output format for streaming
-    this.speechConfig.speechSynthesisOutputFormat = 
-      this.SpeechSDK.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3;
+
+    try {
+      // Configure for streaming synthesis
+      this.speechConfig = this.SpeechSDK.SpeechConfig.fromSubscription(
+        process.env.SPEECH_KEY,
+        process.env.SPEECH_REGION
+      );
+
+      // Ultra-fast neural voices for low latency
+      this.voiceMap = {
+        'en': 'en-US-JennyNeural',
+        'es': 'es-ES-AlvaroNeural',
+        'fr': 'fr-FR-DeniseNeural',
+        'de': 'de-DE-ConradNeural',
+        'zh': 'zh-CN-XiaoxiaoNeural',
+        'ja': 'ja-JP-NanamiNeural',
+        'ko': 'ko-KR-SunHiNeural',
+        'pt': 'pt-BR-FranciscaNeural',
+        'ru': 'ru-RU-DariyaNeural',
+        'ar': 'ar-SA-ZariyahNeural'
+      };
+
+      // Set synthesis output format for streaming
+      this.speechConfig.speechSynthesisOutputFormat =
+        this.SpeechSDK.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3;
+
+      this.azureReady = true;
+      console.log('✅ Azure TTS configured');
+    } catch (e) {
+      console.error('Failed to configure Azure TTS:', e);
+      this.azureReady = false;
+    }
   }
 
   /**
@@ -183,16 +192,17 @@ export class StreamingTTS extends EventEmitter {
    * Azure streaming synthesis
    */
   async azureStreamingSynthesize(text, language) {
-    if (!this.SpeechSDK) {
+    if (!this.azureReady || !this.SpeechSDK) {
       // Fallback to ElevenLabs if Azure SDK not available
       return this.elevenLabsStreamingSynthesize(text, language);
     }
-    
+
     const voice = this.voiceMap[language] || this.voiceMap['en'];
-    
+    const locale = voice.split('-').slice(0, 2).join('-') || 'en-US';
+
     // Create SSML for better prosody
     const ssml = `
-      <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${language}">
+      <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${locale}">
         <voice name="${voice}">
           <prosody rate="${this.getSpeedRate()}" pitch="0%">
             ${this.escapeSSML(text)}
@@ -200,45 +210,36 @@ export class StreamingTTS extends EventEmitter {
         </voice>
       </speak>
     `;
-    
+
     return new Promise((resolve, reject) => {
-      // Use default audio output which returns the audio data
-      const audioConfig = this.SpeechSDK.AudioConfig.fromDefaultSpeakerOutput();
-      
-      const synthesizer = new this.SpeechSDK.SpeechSynthesizer(
-        this.speechConfig,
-        audioConfig
-      );
-      
-      // Collect audio data
-      const audioChunks = [];
-      
-      synthesizer.synthesizing = (s, e) => {
-        if (e.result.audioData) {
-          audioChunks.push(Buffer.from(e.result.audioData));
-        }
-      };
-      
-      // Start synthesis
-      synthesizer.speakSsmlAsync(
-        ssml,
-        (result) => {
-          synthesizer.close();
-          
-          if (result.reason === this.SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
-            // Get the audio data and create stream
-            const audioData = result.audioData || Buffer.concat(audioChunks);
-            const audioStream = this.createAudioStream(audioData);
-            resolve(audioStream);
-          } else {
-            reject(new Error(`Synthesis failed: ${result.errorDetails}`));
+      try {
+        // Construct synthesizer without binding to device output; rely on result.audioData
+        const synthesizer = new this.SpeechSDK.SpeechSynthesizer(this.speechConfig);
+
+        synthesizer.speakSsmlAsync(
+          ssml,
+          (result) => {
+            try {
+              synthesizer.close();
+              if (result.reason === this.SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
+                const buffer = Buffer.from(result.audioData);
+                const audioStream = this.createAudioStream(buffer);
+                resolve(audioStream);
+              } else {
+                reject(new Error(`Synthesis failed: ${result.errorDetails}`));
+              }
+            } catch (e) {
+              reject(e);
+            }
+          },
+          (error) => {
+            try { synthesizer.close(); } catch {}
+            reject(error);
           }
-        },
-        (error) => {
-          synthesizer.close();
-          reject(error);
-        }
-      );
+        );
+      } catch (err) {
+        reject(err);
+      }
     });
   }
 

@@ -10,7 +10,7 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -20,7 +20,7 @@
             justify-content: center;
             padding: 20px;
         }
-        
+
         .container {
             background: white;
             border-radius: 20px;
@@ -29,14 +29,14 @@
             max-width: 800px;
             width: 100%;
         }
-        
+
         h1 {
             color: #333;
             margin-bottom: 30px;
             text-align: center;
             font-size: 28px;
         }
-        
+
         .mode-indicator {
             background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
             color: white;
@@ -47,21 +47,21 @@
             display: inline-block;
             margin-bottom: 20px;
         }
-        
+
         .setup-section {
             margin-bottom: 30px;
             padding: 20px;
             background: #f8f9fa;
             border-radius: 12px;
         }
-        
+
         .input-group {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 15px;
             margin-bottom: 20px;
         }
-        
+
         .form-control {
             padding: 12px;
             border: 2px solid #e0e0e0;
@@ -69,13 +69,13 @@
             font-size: 16px;
             transition: all 0.3s;
         }
-        
+
         .form-control:focus {
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
         }
-        
+
         .btn {
             padding: 12px 24px;
             border: none;
@@ -85,28 +85,28 @@
             cursor: pointer;
             transition: all 0.3s;
         }
-        
+
         .btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
-        
+
         .btn-danger {
             background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
             color: white;
         }
-        
+
         .btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
-        
+
         .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
         }
-        
+
         .status {
             padding: 10px;
             border-radius: 8px;
@@ -114,17 +114,17 @@
             text-align: center;
             font-weight: 500;
         }
-        
+
         .status.connected {
             background: #d4edda;
             color: #155724;
         }
-        
+
         .status.disconnected {
             background: #f8d7da;
             color: #721c24;
         }
-        
+
         .translation-display {
             background: #f8f9fa;
             border-radius: 12px;
@@ -132,7 +132,7 @@
             min-height: 200px;
             margin-bottom: 20px;
         }
-        
+
         .partial-text {
             color: #6c757d;
             font-style: italic;
@@ -142,7 +142,7 @@
             border-radius: 8px;
             border-left: 3px solid #ffc107;
         }
-        
+
         .final-text {
             color: #212529;
             font-weight: 500;
@@ -152,26 +152,26 @@
             border-radius: 8px;
             border-left: 3px solid #28a745;
         }
-        
+
         .sentence-playing {
             background: linear-gradient(90deg, #e3f2fd 0%, #ffffff 100%);
             border-left: 3px solid #2196f3;
             animation: pulse 0.5s ease-in-out;
         }
-        
+
         @keyframes pulse {
             0% { transform: scale(1); }
             50% { transform: scale(1.02); }
             100% { transform: scale(1); }
         }
-        
+
         .metrics {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 15px;
             margin-top: 20px;
         }
-        
+
         .metric-card {
             background: white;
             padding: 15px;
@@ -179,19 +179,19 @@
             text-align: center;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        
+
         .metric-value {
             font-size: 24px;
             font-weight: bold;
             color: #667eea;
         }
-        
+
         .metric-label {
             font-size: 12px;
             color: #6c757d;
             margin-top: 5px;
         }
-        
+
         .confidence-indicator {
             display: inline-block;
             padding: 4px 8px;
@@ -200,22 +200,22 @@
             font-weight: bold;
             margin-left: 10px;
         }
-        
+
         .confidence-high {
             background: #28a745;
             color: white;
         }
-        
+
         .confidence-medium {
             background: #ffc107;
             color: #333;
         }
-        
+
         .confidence-low {
             background: #dc3545;
             color: white;
         }
-        
+
         .audio-status {
             padding: 10px;
             background: #e7f3ff;
@@ -224,12 +224,12 @@
             text-align: center;
             display: none;
         }
-        
+
         .audio-status.unlocked {
             background: #d4edda;
             color: #155724;
         }
-        
+
         .audio-status.locked {
             background: #fff3cd;
             color: #856404;
@@ -240,13 +240,13 @@
     <div class="container">
         <h1>🎧 Hybrid Translation Listener</h1>
         <div class="mode-indicator">HYBRID MODE: Fast Display + Smart Audio</div>
-        
+
         <div class="setup-section">
             <div class="input-group">
-                <input type="text" 
-                       id="sessionCode" 
-                       class="form-control" 
-                       placeholder="Session Code (e.g., ABCD)" 
+                <input type="text"
+                       id="sessionCode"
+                       class="form-control"
+                       placeholder="Session Code (e.g., ABCD)"
                        maxlength="4"
                        style="text-transform: uppercase">
                 <select id="targetLang" class="form-control">
@@ -267,18 +267,28 @@
                 <button id="leaveBtn" class="btn btn-danger" disabled>Leave Session</button>
             </div>
         </div>
-        
+
         <div id="status" class="status disconnected">Not connected</div>
-        
+
         <div id="audioStatus" class="audio-status">
             🔇 Click anywhere to enable audio playback
         </div>
-        
+
         <div class="translation-display">
-            <h3>Translation Stream</h3>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <h3 style="margin:0;">Translation Stream</h3>
+              <div style="margin-left:auto; font-size:12px; color:#555; display:flex; gap:12px; align-items:center;">
+                Hold (ms): <input id="holdMs" type="number" value="1200" min="0" step="100" style="width:80px; padding:4px;">
+                Queue: <span id="queueDepth">0</span>
+                <button id="catchUpBtn" class="btn btn-secondary" style="padding:4px 8px;">Catch up</button>
+                <label style="display:flex; gap:6px; align-items:center;">
+                  <input type="checkbox" id="skipToLive" /> Skip to live
+                </label>
+              </div>
+            </div>
             <div id="translationArea"></div>
         </div>
-        
+
         <div class="metrics">
             <div class="metric-card">
                 <div class="metric-value" id="partialCount">0</div>
@@ -298,7 +308,7 @@
             </div>
         </div>
     </div>
-    
+
     <script src="/socket.io/socket.io.js"></script>
     <script>
     class HybridTranslationListener {
@@ -309,7 +319,14 @@
             this.isPlaying = false;
             this.audioContext = null;
             this.audioUnlocked = false;
-            
+            this.webAudioPreferred = true;
+            this.recentPlayed = new Map(); // normalizedText -> timestamp
+            // Playback rate fixed to preserve natural pitch
+            this.minRate = 1.0;
+            this.maxRate = 1.0;
+            this.rateStep = 0.0;
+            this.recentWindowMs = 15000; // 15s dedupe window
+
             // Metrics
             this.metrics = {
                 partials: 0,
@@ -318,16 +335,16 @@
                 totalLatency: 0,
                 latencyCount: 0
             };
-            
+
             // Track displayed text
             this.currentText = '';
             this.sentenceElements = new Map();
-            
+
             this.initializeElements();
             this.attachEventListeners();
             this.initializeAudioContext();
         }
-        
+
         initializeElements() {
             this.elements = {
                 sessionCode: document.getElementById('sessionCode'),
@@ -340,24 +357,37 @@
                 partialCount: document.getElementById('partialCount'),
                 sentenceCount: document.getElementById('sentenceCount'),
                 audioCount: document.getElementById('audioCount'),
-                latencyMs: document.getElementById('latencyMs')
+                latencyMs: document.getElementById('latencyMs'),
+                holdMs: document.getElementById('holdMs'),
+                queueDepth: document.getElementById('queueDepth'),
+                catchUpBtn: document.getElementById('catchUpBtn'),
+                skipToLive: document.getElementById('skipToLive')
             };
         }
-        
+
         attachEventListeners() {
             this.elements.joinBtn.addEventListener('click', () => this.joinSession());
             this.elements.leaveBtn.addEventListener('click', () => this.leaveSession());
-            
+            // Queue settings
+            this.maxQueueDepth = 5; // adaptive cap
+            this.dropPolicy = 'dropOldest'; // or 'dropNewest'
+
+            // UI controls
+            this.elements.catchUpBtn.addEventListener('click', () => this.catchUp());
+            this.elements.skipToLive.addEventListener('change', () => {
+                if (this.elements.skipToLive.checked) this.catchUp();
+            });
+
             this.elements.sessionCode.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') this.joinSession();
             });
-            
+
             // Audio unlock listeners
             document.addEventListener('click', () => this.unlockAudio());
             document.addEventListener('keydown', () => this.unlockAudio());
             document.addEventListener('touchstart', () => this.unlockAudio());
         }
-        
+
         initializeAudioContext() {
             try {
                 window.AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -367,26 +397,26 @@
                 console.error('Failed to initialize audio context:', error);
             }
         }
-        
+
         async unlockAudio() {
             if (this.audioUnlocked || !this.audioContext) return;
-            
+
             try {
                 if (this.audioContext.state === 'suspended') {
                     await this.audioContext.resume();
                 }
-                
+
                 // Create and play silent buffer to unlock
                 const buffer = this.audioContext.createBuffer(1, 1, 22050);
                 const source = this.audioContext.createBufferSource();
                 source.buffer = buffer;
                 source.connect(this.audioContext.destination);
                 source.start(0);
-                
+
                 this.audioUnlocked = true;
                 this.elements.audioStatus.className = 'audio-status unlocked';
                 this.elements.audioStatus.textContent = '🔊 Audio enabled - ready to play';
-                
+
                 // Process any queued audio
                 if (this.audioQueue.length > 0 && !this.isPlaying) {
                     this.processAudioQueue();
@@ -395,61 +425,72 @@
                 console.error('Failed to unlock audio:', error);
             }
         }
-        
+
         joinSession() {
             const code = this.elements.sessionCode.value.trim().toUpperCase();
             const targetLang = this.elements.targetLang.value;
-            
+
             if (code.length !== 4) {
                 alert('Please enter a 4-character session code');
                 return;
             }
-            
+
             this.sessionCode = code;
-            this.socket = io();
-            
+            this.updateStatus('connecting', 'Connecting...');
+            this.socket = io({ transports: ['websocket'] });
+
             this.socket.on('connect', () => {
                 console.log('Connected to server');
+                this.updateStatus('connected', `Connected (ws). Joining ${code}...`);
                 this.socket.emit('streaming-listener-join', {
                     sessionCode: code,
                     preferredLanguage: targetLang
                 });
             });
-            
+
             this.socket.on('joined', (data) => {
                 if (data.ok) {
                     this.updateStatus('connected', `Connected to session ${code}`);
                     this.elements.joinBtn.disabled = true;
                     this.elements.leaveBtn.disabled = false;
                     console.log('Joined session:', data);
+            this.socket.on('connect_error', (err) => {
+                console.error('Socket connect_error', err);
+                this.updateStatus('disconnected', 'Connection failed. Check server and firewall.');
+            });
+
+            // If server says session-not-found, ensure status reflects it
+            this.socket.io.on('reconnect_attempt', () => {
+                this.updateStatus('connecting', 'Reconnecting...');
+            });
                 }
             });
-            
+
             this.socket.on('session-not-found', () => {
                 this.updateStatus('disconnected', 'Session not found');
                 this.leaveSession();
             });
-            
+
             // Handle translation updates (immediate display)
             this.socket.on('translation-update', (data) => {
                 this.handleTranslationUpdate(data);
             });
-            
+
             // Handle audio stream (stable sentences)
             this.socket.on('audio-stream', (data) => {
                 this.handleAudioStream(data);
             });
-            
+
             this.socket.on('disconnect', () => {
                 this.updateStatus('disconnected', 'Disconnected from server');
                 this.leaveSession();
             });
         }
-        
+
         handleTranslationUpdate(data) {
             this.metrics.partials++;
             this.updateMetric('partialCount', this.metrics.partials);
-            
+
             // Create or update display element
             const element = document.createElement('div');
             element.className = data.isFinal ? 'final-text' : 'partial-text';
@@ -457,16 +498,24 @@
                 <span>${data.text}</span>
                 ${data.partialNumber ? `<span style="color: #999; font-size: 11px;">#${data.partialNumber}</span>` : ''}
             `;
-            
+
             // Update display
             this.currentText = data.text;
+                // Respect hold time so viewers can read
+                const hold = parseInt(this.elements.holdMs.value || '0', 10);
+                if (!isNaN(hold) && hold > 0) {
+                    setTimeout(() => {
+                        // After hold, we can keep it or trim older items if needed
+                        // For now, do nothing; future: maintain a buffer length
+                    }, hold);
+                }
             this.elements.translationArea.innerHTML = '';
             this.elements.translationArea.appendChild(element);
-            
+
             // Auto-scroll
             this.elements.translationArea.scrollTop = this.elements.translationArea.scrollHeight;
         }
-        
+
         handleAudioStream(data) {
             console.log('Audio received:', {
                 language: data.language,
@@ -474,85 +523,157 @@
                 confidence: data.confidence,
                 isStable: data.isStable
             });
-            
-            // Add to audio queue
+
+            // Dedupe BEFORE enqueue
+            const norm = (data.text || '').toLowerCase().replace(/[^a-z0-9áéíóúüñçàèìòùâêîôûäëïöüœæ\s]/gi, '').trim();
+            const now = Date.now();
+            for (const [k, t] of this.recentPlayed) {
+                if (now - t > this.recentWindowMs) this.recentPlayed.delete(k);
+            }
+            if (norm && this.recentPlayed.has(norm)) {
+                console.warn('Dropping duplicate audio segment:', data.text);
+                return; // Do not enqueue duplicates
+            }
+            if (norm) this.recentPlayed.set(norm, now);
+
+            // Enqueue
             this.audioQueue.push(data);
-            
+
             // Update metrics
             this.metrics.sentences++;
             this.updateMetric('sentenceCount', this.metrics.sentences);
-            
-            // Add confidence indicator
+
+            // Optional: add confidence indicator to latest visible item
             if (data.confidence !== undefined) {
                 const confidencePct = (data.confidence * 100).toFixed(0);
-                const confidenceClass = 
+                const confidenceClass =
                     data.confidence > 0.7 ? 'confidence-high' :
-                    data.confidence > 0.4 ? 'confidence-medium' : 
+                    data.confidence > 0.4 ? 'confidence-medium' :
                     'confidence-low';
-                
+
                 const indicator = document.createElement('span');
                 indicator.className = `confidence-indicator ${confidenceClass}`;
                 indicator.textContent = `${confidencePct}% confidence`;
-                
+
                 const lastElement = this.elements.translationArea.lastElementChild;
                 if (lastElement) {
                     lastElement.appendChild(indicator);
                 }
             }
-            
+
+            // Adjust playback rate based on queue depth
+            const depthForRate = this.audioQueue.length + (this.isPlaying ? 1 : 0);
+            // Preserve pitch: disable rate changes (1.0x always)
+            this.currentPlaybackRate = 1.0;
+
+            // Enforce max queue depth adaptively
+            if (this.audioQueue.length > this.maxQueueDepth) {
+                if (this.dropPolicy === 'dropOldest') {
+                    const dropCount = this.audioQueue.length - this.maxQueueDepth;
+                    this.audioQueue.splice(0, dropCount);
+                    console.warn('Dropped oldest audio items to catch up:', dropCount);
+                } else {
+                    // Drop newest
+                    const dropCount = this.audioQueue.length - this.maxQueueDepth;
+                    this.audioQueue.splice(-dropCount, dropCount);
+                    console.warn('Dropped newest audio items to cap queue:', dropCount);
+                }
+            }
+
+            // Update queue depth UI
+            this.updateMetric('queueDepth', this.audioQueue.length + (this.isPlaying ? 1 : 0));
+
             // Process queue if not already playing
             if (!this.isPlaying) {
                 this.processAudioQueue();
             }
         }
-        
+
         async processAudioQueue() {
             if (this.audioQueue.length === 0 || this.isPlaying || !this.audioUnlocked) {
                 return;
             }
-            
+
             this.isPlaying = true;
             const audioData = this.audioQueue.shift();
-            
+
             try {
                 // Highlight playing sentence
                 const playingElement = document.createElement('div');
                 playingElement.className = 'final-text sentence-playing';
                 playingElement.innerHTML = `🔊 ${audioData.text}`;
                 this.elements.translationArea.appendChild(playingElement);
-                
-                // Play audio
-                const audio = new Audio(`data:audio/mp3;base64,${audioData.audio}`);
-                
-                await audio.play();
-                
-                // Update metrics
-                this.metrics.audioPlayed++;
-                this.updateMetric('audioCount', this.metrics.audioPlayed);
-                
-                // Wait for audio to finish
-                audio.onended = () => {
-                    this.isPlaying = false;
-                    
-                    // Remove highlight
-                    playingElement.classList.remove('sentence-playing');
-                    
-                    // Process next in queue
-                    if (this.audioQueue.length > 0) {
-                        this.processAudioQueue();
+
+                // Play sequentially: wait for end before moving on
+                let started = false;
+                if (this.webAudioPreferred && this.audioContext) {
+                    try {
+                        const binary = atob(audioData.audio);
+                        const len = binary.length;
+                        const bytes = new Uint8Array(len);
+                        for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+                        const arrayBuffer = bytes.buffer;
+                        const buffer = await this.audioContext.decodeAudioData(arrayBuffer.slice(0));
+                        const source = this.audioContext.createBufferSource();
+                        source.buffer = buffer;
+                        source.connect(this.audioContext.destination);
+                        // Adaptive playback rate for WebAudio
+                        try { source.playbackRate.value = this.currentPlaybackRate || 1.0; } catch {}
+                        this.isPlaying = true;
+                        source.onended = () => {
+                            // Update metrics
+                            this.metrics.audioPlayed++;
+                            this.updateMetric('audioCount', this.metrics.audioPlayed);
+                            // Mark not playing and continue
+                            this.isPlaying = false;
+                            playingElement.classList.remove('sentence-playing');
+                            setTimeout(() => {
+                                if (this.audioQueue.length > 0) this.processAudioQueue();
+                            }, 30); // tiny gap to avoid overlap
+                        };
+                        source.start(0);
+                        started = true;
+                    } catch (e) {
+                        console.warn('WebAudio decode failed, falling back to HTMLAudio', e);
+                        this.webAudioPreferred = false;
                     }
-                };
+                }
+                if (!started) {
+                    const audioEl = new Audio(`data:audio/mp3;base64,${audioData.audio}`);
+                    // Adaptive playback rate not supported by HTMLAudio natively; attempt via playbackRate
+                    try { audioEl.playbackRate = this.currentPlaybackRate || 1.0; } catch {}
+                    this.isPlaying = true;
+                    audioEl.onended = () => {
+                        this.metrics.audioPlayed++;
+                        this.updateMetric('audioCount', this.metrics.audioPlayed);
+                        this.isPlaying = false;
+                        playingElement.classList.remove('sentence-playing');
+                        setTimeout(() => {
+                            if (this.audioQueue.length > 0) this.processAudioQueue();
+                        }, 30);
+                    };
+                    await audioEl.play();
+                }
             } catch (error) {
                 console.error('Audio playback error:', error);
                 this.isPlaying = false;
-                
+
                 // Try next in queue
                 if (this.audioQueue.length > 0) {
                     setTimeout(() => this.processAudioQueue(), 100);
                 }
             }
         }
-        
+
+        catchUp() {
+            // Skip queued items and keep only the latest one
+            if (this.audioQueue.length > 1) {
+                const last = this.audioQueue[this.audioQueue.length - 1];
+                this.audioQueue = [last];
+            }
+            this.updateMetric('queueDepth', this.audioQueue.length + (this.isPlaying ? 1 : 0));
+        }
+
         updateMetric(elementId, value) {
             const element = document.getElementById(elementId);
             if (element) {
@@ -563,27 +684,27 @@
                 }
             }
         }
-        
+
         updateStatus(type, message) {
             this.elements.status.className = `status ${type}`;
             this.elements.status.textContent = message || (type === 'connected' ? 'Connected' : 'Disconnected');
         }
-        
+
         leaveSession() {
             if (this.socket) {
                 this.socket.disconnect();
                 this.socket = null;
             }
-            
+
             this.audioQueue = [];
             this.isPlaying = false;
-            
+
             this.elements.joinBtn.disabled = false;
             this.elements.leaveBtn.disabled = true;
             this.updateStatus('disconnected');
-            
+
             this.elements.translationArea.innerHTML = '<div style="color: #999; text-align: center;">Waiting for session...</div>';
-            
+
             // Reset metrics
             this.metrics = {
                 partials: 0,
@@ -592,14 +713,14 @@
                 totalLatency: 0,
                 latencyCount: 0
             };
-            
+
             this.updateMetric('partialCount', 0);
             this.updateMetric('sentenceCount', 0);
             this.updateMetric('audioCount', 0);
             this.updateMetric('latencyMs', 0);
         }
     }
-    
+
     // Initialize the application
     const app = new HybridTranslationListener();
     </script>

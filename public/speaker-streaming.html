@@ -284,13 +284,14 @@
                 <span class="performance-badge">< 400ms</span>
             </h1>
             <p class="subtitle">Next-generation simultaneous translation with ultra-low latency</p>
-            
+
             <div class="form-group">
                 <label for="sourceLang">Your Language</label>
                 <select id="sourceLang">
-                    <option value="en">English</option>
+                    <option value="en">English (US)</option>
+                    <option value="fr">French (FR)</option>
+                    <option value="auto-enfr-ca">Auto (English CA ↔ French CA)</option>
                     <option value="es">Spanish</option>
-                    <option value="fr">French</option>
                     <option value="de">German</option>
                     <option value="zh">Chinese</option>
                     <option value="ja">Japanese</option>
@@ -300,7 +301,12 @@
                     <option value="ar">Arabic</option>
                 </select>
             </div>
-            
+
+            <div class="form-group">
+                <label for="phraseList">Boost keywords and acronyms (comma‑separated)</label>
+                <input id="phraseList" type="text" placeholder="e.g., Azure, GPT, AI, S2S, Montréal, Québec, Ottawa, KPI, FYI" />
+            </div>
+
             <div class="form-group">
                 <label>Target Languages (select multiple)</label>
                 <div class="language-grid">
@@ -316,16 +322,16 @@
                     <div class="language-chip" data-lang="ar">Arabic</div>
                 </div>
             </div>
-            
+
             <button id="startBtn">Start Streaming Session</button>
         </div>
-        
+
         <div class="status-section" id="statusSection">
             <h1>Streaming Active</h1>
             <p class="subtitle">Share this code with listeners</p>
-            
+
             <div class="session-code" id="sessionCode">----</div>
-            
+
             <div class="recording-indicator">
                 <div class="recording-dot"></div>
                 <span>LIVE TRANSLATION</span>
@@ -335,7 +341,7 @@
                 <div class="streaming-icon"></div>
                 <span>Streaming with prefix-based translation</span>
             </div>
-            
+
             <div class="metrics">
                 <div class="metric-card">
                     <div class="metric-value" id="latencyValue">0ms</div>
@@ -350,15 +356,16 @@
                     <div class="metric-label">Listeners</div>
                 </div>
             </div>
-            
+
             <button id="stopBtn" style="margin-top: 30px; background: #ef4444;">Stop Session</button>
         </div>
     </div>
 
     <!-- Load SDK and Socket.IO -->
     <script src="/socket.io/socket.io.js"></script>
+
     <script src="/sdk-loader.js"></script>
-    
+
     <script>
         let socket = null;
         let sessionCode = null;
@@ -377,13 +384,13 @@
             chip.addEventListener('click', () => {
                 const lang = chip.dataset.lang;
                 const sourceLang = document.getElementById('sourceLang').value;
-                
+
                 // Can't select source language as target
                 if (lang === sourceLang) {
                     alert("Can't select source language as target");
                     return;
                 }
-                
+
                 chip.classList.toggle('selected');
                 if (chip.classList.contains('selected')) {
                     selectedLanguages.add(lang);
@@ -426,23 +433,23 @@
 
             const sourceLang = document.getElementById('sourceLang').value;
             const targetLangs = Array.from(selectedLanguages);
-            
+
             // Store current languages globally
             currentSourceLang = sourceLang;
             currentTargetLangs = targetLangs;
-            
+
             // Generate session code
             sessionCode = generateSessionCode();
             document.getElementById('sessionCode').textContent = sessionCode;
-            
+
             // Connect to streaming server
             socket = io({
                 transports: ['websocket'] // Force WebSocket for lower latency
             });
-            
+
             socket.on('connect', () => {
                 console.log('Connected to streaming server');
-                
+
                 // Join as streaming speaker
                 socket.emit('streaming-speaker-join', {
                     sessionCode,
@@ -450,30 +457,30 @@
                     targetLangs
                 });
             });
-            
+
             socket.on('joined', (data) => {
                 if (data.ok) {
                     console.log('Session started:', data);
                     startStreamingRecognition(sourceLang, targetLangs);
-                    
+
                     // Switch UI
                     document.getElementById('setupSection').classList.remove('active');
                     document.getElementById('setupSection').style.display = 'none';
                     document.getElementById('statusSection').classList.add('active');
                 }
             });
-            
+
             // Handle metrics updates
             socket.on('metrics', (data) => {
                 updateMetrics(data);
             });
-            
+
             // Handle listener count
             socket.on('listener-joined', () => {
                 metrics.listeners++;
                 updateDisplay();
             });
-            
+
             socket.on('listener-left', () => {
                 metrics.listeners = Math.max(0, metrics.listeners - 1);
                 updateDisplay();
@@ -484,17 +491,17 @@
         async function startStreamingRecognition(sourceLang, targetLangs) {
             try {
                 await window.ensureSDKLoaded();
-                
+
                 // Fetch speech config from server
                 const configResponse = await fetch('/api/speech/token');
                 const tokenData = await configResponse.json();
-                
+
                 // Configure for streaming translation using token
-                const speechConfig = SpeechSDK.SpeechTranslationConfig.fromAuthorizationToken(
+                const speechConfig = window.SpeechSDK.SpeechTranslationConfig.fromAuthorizationToken(
                     tokenData.token,
                     tokenData.region
                 );
-                
+
                 // Map short codes to Azure locale codes for recognition
                 const langMap = {
                     'en': 'en-US',
@@ -508,44 +515,79 @@
                     'ru': 'ru-RU',
                     'ar': 'ar-SA'
                 };
-                
-                // Set source language FIRST
-                const sourceAzureCode = langMap[sourceLang] || 'en-US';
-                speechConfig.speechRecognitionLanguage = sourceAzureCode;
-                console.log(`Source language set to: ${sourceLang} -> ${sourceAzureCode}`);
-                
+
+                // LID Auto (English CA ↔ French CA) or fixed source
+                if (sourceLang === 'auto-enfr-ca') {
+                    const lidConfig = window.SpeechSDK.AutoDetectSourceLanguageConfig.fromLanguages([
+                        'en-CA', 'fr-CA'
+                    ]);
+                    speechConfig.speechRecognitionLanguage = 'en-CA'; // seed
+                    console.log('Auto language detection enabled: en-CA ↔ fr-CA');
+                    // We'll pass lidConfig to recognizer constructor below
+                    window.__lidConfig = lidConfig;
+                } else {
+                    const sourceAzureCode = langMap[sourceLang] || 'en-US';
+                    speechConfig.speechRecognitionLanguage = sourceAzureCode;
+                    console.log(`Source language set to: ${sourceLang} -> ${sourceAzureCode}`);
+                }
+
                 // Add target languages - use simple codes like the test page
                 targetLangs.forEach(lang => {
                     // Use simple language codes for translation targets
                     speechConfig.addTargetLanguage(lang);
                     console.log(`Added target language: ${lang}`);
                 });
-                
+
                 // Enable partial results for streaming
+                speechConfig.outputFormat = window.SpeechSDK.OutputFormat.Detailed;
                 speechConfig.enableDictation();
-                
+
                 // Create audio config with explicit microphone
-                const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+                const audioConfig = window.SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
                 if (!audioConfig) {
                     throw new Error('Failed to create audio config - microphone may not be available');
                 }
-                
-                recognition = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
+
+                // Build recognizer (with optional LID)
+                if (window.__lidConfig) {
+                    recognition = window.SpeechSDK.TranslationRecognizer.FromConfig(
+                        speechConfig,
+                        window.__lidConfig,
+                        audioConfig
+                    );
+                } else {
+                    recognition = new window.SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
+                }
                 if (!recognition) {
                     throw new Error('Failed to create TranslationRecognizer');
                 }
-                
+                // Apply phrase list if provided
+                const phraseText = (document.getElementById('phraseList').value || '').trim();
+                if (phraseText) {
+                    const phrases = phraseText.split(',').map(p => p.trim()).filter(Boolean);
+                    if (phrases.length > 0) {
+                        const autoConfig = window.SpeechSDK.RecognizerConfig ? new window.SpeechSDK.RecognizerConfig(speechConfig, audioConfig) : null;
+                        try {
+                            const grammar = window.SpeechSDK.PhraseListGrammar.fromRecognizer(recognition);
+                            phrases.forEach(p => grammar.addPhrase(p));
+                            console.log(`Added ${phrases.length} phrases to PhraseListGrammar`);
+                        } catch (e) {
+                            console.warn('PhraseListGrammar not available:', e);
+                        }
+                    }
+                }
+
                 console.log('TranslationRecognizer created with config:', {
-                    source: sourceAzureCode,
+                    source: speechConfig.speechRecognitionLanguage,
                     targets: targetLangs
                 });
-                
+
                 // Handle streaming translations
                 recognition.recognizing = (s, e) => {
-                    const reasonName = Object.keys(SpeechSDK.ResultReason).find(key => 
-                        SpeechSDK.ResultReason[key] === e.result.reason) || 'Unknown';
+                    const reasonName = Object.keys(window.SpeechSDK.ResultReason).find(key =>
+                        window.SpeechSDK.ResultReason[key] === e.result.reason) || 'Unknown';
                     console.log(`Recognizing event [${reasonName}]:`, e.result.text);
-                    
+
                     // Check if translations exist
                     if (e.result.translations && e.result.translations.size > 0) {
                         console.log('✅ Translations found:');
@@ -562,12 +604,12 @@
                         }
                     }
                 };
-                
+
                 recognition.recognized = (s, e) => {
-                    const reasonName = Object.keys(SpeechSDK.ResultReason).find(key => 
-                        SpeechSDK.ResultReason[key] === e.result.reason) || 'Unknown';
+                    const reasonName = Object.keys(window.SpeechSDK.ResultReason).find(key =>
+                        window.SpeechSDK.ResultReason[key] === e.result.reason) || 'Unknown';
                     console.log(`Recognized event [${reasonName}]:`, e.result.text);
-                    
+
                     // Check if translations exist
                     if (e.result.translations && e.result.translations.size > 0) {
                         console.log('✅ Translations found:');
@@ -576,7 +618,7 @@
                         });
                         // Process translation
                         handleStreamingTranslation(e.result, true);
-                    } else if (e.result.reason === SpeechSDK.ResultReason.NoMatch) {
+                    } else if (e.result.reason === window.SpeechSDK.ResultReason.NoMatch) {
                         console.log('No speech detected');
                     } else if (e.result.text) {
                         console.log('⚠️ No translations in recognized event, using original');
@@ -584,26 +626,26 @@
                         handleStreamingTranslation(e.result, true);
                     }
                 };
-                
+
                 recognition.canceled = (s, e) => {
                     console.error('Recognition canceled:', e.errorDetails);
                     alert('Recognition stopped: ' + e.errorDetails);
                 };
-                
+
                 recognition.sessionStarted = (s, e) => {
                     console.log('Session started:', e.sessionId);
                 };
-                
+
                 recognition.speechStartDetected = (s, e) => {
                     console.log('Speech start detected');
                 };
-                
+
                 // Start continuous recognition
                 recognition.startContinuousRecognitionAsync(
                     () => console.log('Streaming recognition started'),
                     (err) => console.error('Failed to start:', err)
                 );
-                
+
             } catch (error) {
                 console.error('Failed to start recognition:', error);
                 alert('Failed to start streaming. Please check your microphone permissions.');
@@ -613,12 +655,12 @@
         // Handle streaming translation
         function handleStreamingTranslation(result, isFinal) {
             if (!result.text) return;
-            
+
             const timestamp = Date.now();
-            
+
             // Don't send translations from client - let server handle everything
             // This ensures punctuation helper is applied before translation
-            
+
             // Send to server via WebSocket
             if (socket && socket.connected) {
                 const data = {
@@ -630,10 +672,10 @@
                     offset: result.offset,
                     duration: result.duration
                 };
-                
+
                 console.log(`→ Sending to server for punctuation & translation: "${result.text.substring(0, 30)}..." (${isFinal ? 'final' : 'partial'})`);
                 socket.emit('translation-stream', data);
-                
+
                 // Update metrics
                 if (isFinal) {
                     metrics.segments++;
@@ -653,11 +695,11 @@
                 );
                 recognition.close();
             }
-            
+
             if (socket) {
                 socket.disconnect();
             }
-            
+
             // Reset UI
             document.getElementById('statusSection').classList.remove('active');
             document.getElementById('setupSection').style.display = 'block';
@@ -680,7 +722,7 @@
             const latencyEl = document.getElementById('latencyValue');
             const latency = Math.round(metrics.totalLatency);
             latencyEl.textContent = `${latency}ms`;
-            
+
             // Color code based on performance
             latencyEl.className = 'metric-value';
             if (latency <= 400) {
@@ -690,7 +732,7 @@
             } else {
                 latencyEl.classList.add('latency-bad');
             }
-            
+
             document.getElementById('segmentsValue').textContent = metrics.segments;
             document.getElementById('listenersValue').textContent = metrics.listeners;
         }

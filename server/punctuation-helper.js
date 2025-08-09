@@ -18,36 +18,82 @@ export class PunctuationHelper {
         // Track context for better punctuation
         this.sessionContext = new Map();
     }
-    
+
+    /**
+     * Insert helpful comma pauses for readability before conjunctions/fillers
+     */
+    insertCommaPauses(text) {
+        let out = text;
+        // Insert comma before common conjunctions if clause is long enough
+        const conjPatterns = ['however', 'although', 'though', 'because', 'since', 'while', 'after', 'before', 'but'];
+        for (const conj of conjPatterns) {
+            const re = new RegExp(`\\s+(${conj})\\s+`, 'i');
+            if (re.test(out)) {
+                // Only insert if there isn't already a comma or sentence punctuation just before the conjunction
+                out = out.replace(re, (m, g1, offset) => {
+                    const idx = out.toLowerCase().indexOf(g1.toLowerCase());
+                    const prev = out.slice(Math.max(0, idx - 2), idx);
+                    if (!prev.includes(',') && !/[.!?؟。！]/.test(prev)) {
+                        return `, ${g1} `;
+                    }
+                    return ` ${g1} `;
+                });
+            }
+        }
+        // Heuristic for 'and' when preceding clause is long
+        const andRe = /\sand\s/i;
+        const parts = out.split(andRe);
+        if (parts.length > 1) {
+            const left = parts[0];
+            const leftWords = left.trim().split(/\s+/).length;
+            if (leftWords >= 7 && !/,\s*$/.test(left) && !/[.!?؟。！]\s*$/.test(left)) {
+                out = left + ', and ' + parts.slice(1).join(' and ');
+            }
+        }
+        // Fillers: add trailing comma if missing
+        const fillers = [
+            'you know', 'you see', 'i think', 'in my opinion',
+            'vous savez', 'euh', 'hmm', 'mmm'
+        ];
+        for (const f of fillers) {
+            const re = new RegExp(`\\b${f}\\b(?!,)`, 'i');
+            out = out.replace(re, (m) => `${m},`);
+        }
+        return out;
+    }
+
     /**
      * Add intelligent punctuation to text
      */
     punctuate(text, sessionId = 'default', isFinal = false) {
         if (!text || text.trim().length === 0) return text;
-        
+
         // Clean the text
         text = text.trim();
-        
+
+        // Add helpful comma pauses first (non-destructive if already present)
+        text = this.insertCommaPauses(text);
+
         // Check if already has ending punctuation
-        if (/[.!?]$/.test(text)) {
+        if (/[.!?؟。！]$/.test(text)) {
             return text;
         }
-        
+
         // Get session context
         let context = this.sessionContext.get(sessionId);
         if (!context) {
-            context = { 
-                wordCount: 0, 
+            context = {
+                wordCount: 0,
                 lastText: '',
-                sentenceCount: 0 
+                sentenceCount: 0
             };
             this.sessionContext.set(sessionId, context);
         }
-        
+
         // Count words
         const words = text.split(/\s+/);
         const wordCount = words.length;
-        
+
         // For final transcripts, always add punctuation
         if (isFinal) {
             const punctuation = this.determinePunctuation(text);
@@ -55,17 +101,17 @@ export class PunctuationHelper {
             context.lastText = text;
             return text + punctuation;
         }
-        
+
         // For partial transcripts, add punctuation if it looks complete
         if (this.looksComplete(text, wordCount)) {
             const punctuation = this.determinePunctuation(text);
             return text + punctuation;
         }
-        
+
         // Update context
         context.wordCount = wordCount;
         context.lastText = text;
-        
+
         return text;
     }
     

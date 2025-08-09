@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8"/>
   <title>Speaker – Azure S2S</title>
-  <link rel="stylesheet" href="./style.css"/>
+
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <!-- Microsoft Cognitive Services Speech SDK -->
-  <script src="https://aka.ms/csspeech/jsbrowserpackage"></script>
+  <!-- Azure Speech SDK loader ensures global SpeechSDK is ready -->
+  <script src="/sdk-loader.js"></script>
 </head>
 <body>
   <h1>Speaker</h1>
@@ -50,21 +50,24 @@ async function startSession(sessionCode, langCandidates) {
   socket = io();
   socket.emit('speaker-join', { sessionCode, sourceLanguageHint: langCandidates[0] });
 
+  // Ensure Azure Speech SDK is loaded
+  await window.ensureSDKLoaded();
+
   // get Speech token
   const tok = await fetch('/api/speech/token').then(r => r.json());
-  const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(tok.token, tok.region);
-  // Continuous recognition + detailed output (for better stability/metadata):contentReference[oaicite:11]{index=11}:contentReference[oaicite:12]{index=12}
-  speechConfig.outputFormat = SpeechSDK.OutputFormat.Detailed;
+  const speechConfig = window.SpeechSDK.SpeechConfig.fromAuthorizationToken(tok.token, tok.region);
+  // Continuous recognition + detailed output (for better stability/metadata)
+  speechConfig.outputFormat = window.SpeechSDK.OutputFormat.Detailed;
 
   // Auto-detect source language – limit candidates for accuracy & speed:contentReference[oaicite:13]{index=13}
   let lidConfig = null;
   if (langCandidates.length > 1) {
     lidConfig = SpeechSDK.AutoDetectSourceLanguageConfig.fromLanguages(langCandidates);
   }
-  const audioCfg = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+  const audioCfg = window.SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
   recognizer = lidConfig
-    ? SpeechSDK.SpeechRecognizer.FromConfig(speechConfig, lidConfig, audioCfg)
-    : new SpeechSDK.SpeechRecognizer(speechConfig, langCandidates[0], audioCfg);
+    ? window.SpeechSDK.SpeechRecognizer.FromConfig(speechConfig, lidConfig, audioCfg)
+    : new window.SpeechSDK.SpeechRecognizer(speechConfig, langCandidates[0], audioCfg);
 
   // Phrase list to bias STT toward event terms (names, acronyms, brands):contentReference[oaicite:14]{index=14}:contentReference[oaicite:15]{index=15}
   const pl = SpeechSDK.PhraseListGrammar.fromRecognizer(recognizer);

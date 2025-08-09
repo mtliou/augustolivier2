@@ -16,6 +16,23 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Local proxy for Azure Speech SDK script placed BEFORE static to avoid static 404
+app.get('/sdk/speech.js', async (req, res) => {
+  try {
+    const url = 'https://aka.ms/csspeech/jsbrowserpackageraw';
+    const response = await fetch(url);
+    if (!response.ok) {
+      res.status(response.status).send('Failed to fetch Speech SDK');
+      return;
+    }
+    res.setHeader('Content-Type', 'application/javascript');
+    const text = await response.text();
+    res.send(text);
+  } catch (e) {
+    console.error('SDK proxy error (early route)', e);
+    res.status(502).send('SDK proxy error');
+  }
+});
 // Performance monitoring middleware
 app.use(performanceMonitor);
 
@@ -31,7 +48,7 @@ app.get('/api/metrics', (req, res) => {
 });
 
 // Health check
-app.get('/healthz', (_req, res) => res.json({ 
+app.get('/healthz', (_req, res) => res.json({
   ok: true,
   method: 'direct-translation',
   version: '2.0.0'
@@ -44,11 +61,28 @@ app.get('/speech-config', (req, res) => {
     key: process.env.SPEECH_KEY
   });
 });
+// Local proxy for Azure Speech SDK script to avoid extension/CDN blocking
+app.get('/sdk/speech.js', async (req, res) => {
+  try {
+    const url = 'https://aka.ms/csspeech/jsbrowserpackageraw';
+    const response = await fetch(url);
+    if (!response.ok) {
+      res.status(response.status).send('Failed to fetch Speech SDK');
+      return;
+    }
+    res.setHeader('Content-Type', 'application/javascript');
+    const text = await response.text();
+    res.send(text);
+  } catch (e) {
+    console.error('SDK proxy error', e);
+    res.status(502).send('SDK proxy error');
+  }
+});
 
 const server = http.createServer(app);
 
 // Configure Socket.IO with optimizations
-const io = new Server(server, { 
+const io = new Server(server, {
   cors: { origin: '*' },
   // Binary frames for audio streaming
   perMessageDeflate: false,
