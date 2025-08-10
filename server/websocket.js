@@ -3,27 +3,73 @@ import { recordConnection, recordTranslation, recordError } from './performance-
 import { getTranslator } from './text-translator.js';
 import { streamingSentenceExtractor } from './streaming-sentence-extractor.js';
 import { hybridSentenceExtractor } from './hybrid-sentence-extractor.js';
+import { conferenceSentenceExtractor } from './conference-sentence-extractor.js';
+import { ultraLowLatencyExtractor } from './ultra-low-latency-extractor.js';
+import { naturalLanguageExtractor } from './natural-language-extractor.js';
+import { webSocketTTS } from './websocket-streaming-tts.js';
+import { continuousStreamProcessor } from './continuous-stream-processor.js';
 import { StreamingTTS } from './streaming-tts.js';
+import { EnhancedTTS } from './enhanced-tts.js';
 import { punctuationHelper } from './punctuation-helper.js';
+import { getAvailableVoices } from './voice-profiles.js';
 
 const sessions = new Map(); // code -> { speakerId, sourceLang, targetLangs, listeners: Map, metrics }
 
 // Configuration for hybrid mode
-const USE_HYBRID_MODE = true; // Toggle between hybrid and original approach
+const USE_HYBRID_MODE = false; // Disabled
+const USE_CONFERENCE_MODE = false; // Disabled
+const USE_ULTRA_LOW_LATENCY = false; // Disabled
+const USE_NATURAL_LANGUAGE = false; // Disabled - using continuous streaming
+const USE_CONTINUOUS_STREAMING = true; // Use WebSocket streaming for seamless TTS
+const USE_ENHANCED_TTS = false; // Disabled when using WebSocket streaming
 const HYBRID_CONFIG = {
-  stabilityThreshold: 2,    // Sentences need 2 appearances
-  stabilityTimeMs: 500,     // Or 500ms persistence
+  stabilityThreshold: 1,    // Reduced from 2 - generate TTS faster
+  stabilityTimeMs: 200,     // Reduced from 500ms - much faster response
   displayPartials: true      // Show partials immediately
 };
 
-// Initialize TTS provider
-const ttsProvider = new StreamingTTS({
-  provider: 'azure',
-  quality: 'balanced',
-  streamingEnabled: true
-});
+// Initialize TTS provider - use enhanced for conferences
+const ttsProvider = USE_ENHANCED_TTS 
+  ? new EnhancedTTS({
+      elevenLabsKey: process.env.ELEVENLABS_API_KEY || 'sk_83b559a4751d0df3a401738997524d4932d1eed423bf1dde',
+      primaryProvider: 'elevenlabs',
+      streamingLatency: 1, // Ultra-low latency for conferences
+      queueThreshold: 2, // Start adapting speed earlier for conferences
+      maxSpeed: 1.4 // Cap at 40% speed increase for clarity
+    })
+  : new StreamingTTS({
+      provider: 'azure',
+      quality: 'balanced',
+      streamingEnabled: true
+    });
 
 export function initOptimizedSocket(io) {
+  // Set up WebSocket TTS audio streaming
+  if (USE_CONTINUOUS_STREAMING) {
+    webSocketTTS.on('audio-chunk', ({ audio, language, isFinal }) => {
+      // Find all sessions and listeners for this language
+      for (const [code, session] of sessions) {
+        session.listeners.forEach((listener, listenerId) => {
+          if (listener.lang === language) {
+            const listenerSocket = io.sockets.sockets.get(listenerId);
+            if (listenerSocket) {
+              // Send audio directly as it arrives from WebSocket
+              listenerSocket.emit('audio-stream', {
+                audio: audio.toString('base64'),
+                format: 'mp3',
+                language: language,
+                streaming: true,
+                isFinal: isFinal
+              });
+            }
+          }
+        });
+      }
+    });
+    
+    console.log('🌊 WebSocket Streaming TTS initialized');
+  }
+  
   io.on('connection', (socket) => {
     recordConnection('connect');
 
@@ -81,12 +127,12 @@ export function initOptimizedSocket(io) {
         }
         continuousState.set(key, st);
         const duration = nowTs - st.runStartTs;
-        if (st.continuous && duration > 3000) {
-          // In continuous mode for >3s -> use phrase mode with lower threshold
-          hybridSentenceExtractor.setSessionParams(code, lang, { threshold: 1, timeMs: 300, phraseMode: true });
+        if (st.continuous && duration > 2000) {
+          // In continuous mode for >2s -> use phrase mode with lower threshold
+          hybridSentenceExtractor.setSessionParams(code, lang, { threshold: 1, timeMs: 150, phraseMode: true });
         } else {
-          // Default mode
-          hybridSentenceExtractor.setSessionParams(code, lang, { threshold: 2, timeMs: 600, phraseMode: false });
+          // Default mode - more aggressive for conferences
+          hybridSentenceExtractor.setSessionParams(code, lang, { threshold: 1, timeMs: 200, phraseMode: false });
         }
       };
 
@@ -134,7 +180,312 @@ export function initOptimizedSocket(io) {
       });
 
       // Generate TTS/display based on selected mode
-      if (USE_HYBRID_MODE) {
+      if (USE_CONTINUOUS_STREAMING) {
+        // CONTINUOUS STREAMING MODE: Seamless TTS with no breaks
+        for (const [lang, translatedText] of Object.entries(translations)) {
+          if (!translatedText) continue;
+          
+          // Always display immediately
+          session.listeners.forEach((listener, listenerId) => {
+            if (listener.lang === lang) {
+              const listenerSocket = io.sockets.sockets.get(listenerId);
+              if (listenerSocket) {
+                listenerSocket.emit('translation-update', {
+                  text: translatedText,
+                  language: lang,
+                  isFinal: data.isFinal
+                });
+              }
+            }
+          });
+          
+          // Process with continuous streaming
+          const streamResult = continuousStreamProcessor.processText(
+            code,
+            lang,
+            translatedText,
+            data.isFinal
+          );
+          
+          if (streamResult.shouldSend) {
+            console.log(`🌊 [STREAMING] Sending ${streamResult.newChars} new chars to WebSocket TTS`);
+            
+            // Get voice preferences
+            const listenersVoices = new Map();
+            session.listeners.forEach((listener, listenerId) => {
+              if (listener.lang === lang) {
+                listenersVoices.set(listenerId, listener.voice);
+              }
+            });
+            
+            const voicePrefs = Array.from(listenersVoices.values());
+            const commonVoice = voicePrefs.every(v => v === voicePrefs[0]) ? voicePrefs[0] : null;
+            
+            // Stream text to WebSocket TTS (no chunking, continuous synthesis)
+            await webSocketTTS.streamText(
+              code,
+              lang,
+              streamResult.textToSend,
+              streamResult.isFinal,
+              commonVoice
+            );
+          }
+        }
+      } else if (USE_NATURAL_LANGUAGE) {
+        // NATURAL LANGUAGE MODE: Low latency with natural-sounding chunks
+        for (const [lang, translatedText] of Object.entries(translations)) {
+          if (!translatedText) continue;
+          
+          // Always display immediately for visual feedback
+          session.listeners.forEach((listener, listenerId) => {
+            if (listener.lang === lang) {
+              const listenerSocket = io.sockets.sockets.get(listenerId);
+              if (listenerSocket) {
+                listenerSocket.emit('translation-update', {
+                  text: translatedText,
+                  language: lang,
+                  isFinal: data.isFinal
+                });
+              }
+            }
+          });
+          
+          // Process with natural language boundaries
+          const result = naturalLanguageExtractor.processText(
+            code,
+            lang,
+            translatedText,
+            data.isFinal
+          );
+          
+          if (result.chunks.length > 0) {
+            console.log(`🌊 [NATURAL] Generating TTS for ${result.chunks.length} natural chunks in ${lang}`);
+            
+            for (const chunkData of result.chunks) {
+              try {
+                // Get voice preferences
+                const listenersVoices = new Map();
+                session.listeners.forEach((listener, listenerId) => {
+                  if (listener.lang === lang) {
+                    listenersVoices.set(listenerId, listener.voice);
+                  }
+                });
+                
+                const voicePrefs = Array.from(listenersVoices.values());
+                const commonVoice = voicePrefs.every(v => v === voicePrefs[0]) ? voicePrefs[0] : null;
+                
+                // Generate TTS with natural prosody
+                const audioStream = USE_ENHANCED_TTS 
+                  ? await ttsProvider.generateWithQueueManagement(chunkData.text, lang, code, commonVoice)
+                  : await ttsProvider.streamSynthesize(chunkData.text, lang);
+                  
+                if (audioStream) {
+                  const chunks = [];
+                  audioStream.on('data', chunk => chunks.push(chunk));
+                  audioStream.on('end', () => {
+                    const audioBuffer = Buffer.concat(chunks);
+                    const base64Audio = audioBuffer.toString('base64');
+                    
+                    // Send to listeners
+                    session.listeners.forEach((listener, listenerId) => {
+                      if (listener.lang === lang) {
+                        const listenerSocket = io.sockets.sockets.get(listenerId);
+                        if (listenerSocket) {
+                          listenerSocket.emit('audio-stream', {
+                            audio: base64Audio,
+                            format: 'mp3',
+                            language: lang,
+                            text: chunkData.text,
+                            sequence: chunkData.sequence,
+                            wordCount: chunkData.wordCount,
+                            isNaturalBoundary: chunkData.isNaturalBoundary
+                          });
+                          console.log(`🔊 [NATURAL] Sent chunk #${chunkData.sequence} (${chunkData.wordCount} words): "${chunkData.text.substring(0, 40)}..."`);
+                        }
+                      }
+                    });
+                  });
+                  
+                  audioStream.on('error', (error) => {
+                    console.error(`TTS stream error for ${lang}:`, error);
+                  });
+                }
+              } catch (error) {
+                console.error(`TTS generation error for ${lang}:`, error);
+              }
+            }
+          }
+        }
+      } else if (USE_ULTRA_LOW_LATENCY) {
+        // ULTRA-LOW LATENCY MODE: Generate TTS immediately as words arrive
+        for (const [lang, translatedText] of Object.entries(translations)) {
+          if (!translatedText) continue;
+          
+          // Always display immediately
+          session.listeners.forEach((listener, listenerId) => {
+            if (listener.lang === lang) {
+              const listenerSocket = io.sockets.sockets.get(listenerId);
+              if (listenerSocket) {
+                listenerSocket.emit('translation-update', {
+                  text: translatedText,
+                  language: lang,
+                  isFinal: data.isFinal
+                });
+              }
+            }
+          });
+          
+          // Process text with ultra-low latency chunking (works on both partials and finals)
+          const result = ultraLowLatencyExtractor.processText(
+            code,
+            lang,
+            translatedText,
+            data.isFinal
+          );
+          
+          if (result.chunks.length > 0) {
+            console.log(`⚡ [ULTRA] Generating TTS for ${result.chunks.length} chunks in ${lang}`);
+            
+            for (const chunkData of result.chunks) {
+              try {
+                // Get voice preferences
+                const listenersVoices = new Map();
+                session.listeners.forEach((listener, listenerId) => {
+                  if (listener.lang === lang) {
+                    listenersVoices.set(listenerId, listener.voice);
+                  }
+                });
+                
+                const voicePrefs = Array.from(listenersVoices.values());
+                const commonVoice = voicePrefs.every(v => v === voicePrefs[0]) ? voicePrefs[0] : null;
+                
+                // Generate TTS immediately with queue management
+                const audioStream = USE_ENHANCED_TTS 
+                  ? await ttsProvider.generateWithQueueManagement(chunkData.text, lang, code, commonVoice)
+                  : await ttsProvider.streamSynthesize(chunkData.text, lang);
+                  
+                if (audioStream) {
+                  const chunks = [];
+                  audioStream.on('data', chunk => chunks.push(chunk));
+                  audioStream.on('end', () => {
+                    const audioBuffer = Buffer.concat(chunks);
+                    const base64Audio = audioBuffer.toString('base64');
+                    
+                    // Send to listeners
+                    session.listeners.forEach((listener, listenerId) => {
+                      if (listener.lang === lang) {
+                        const listenerSocket = io.sockets.sockets.get(listenerId);
+                        if (listenerSocket) {
+                          listenerSocket.emit('audio-stream', {
+                            audio: base64Audio,
+                            format: 'mp3',
+                            language: lang,
+                            text: chunkData.text,
+                            sequence: chunkData.sequence,
+                            wordCount: chunkData.wordCount
+                          });
+                          console.log(`🔊 [ULTRA] Sent chunk #${chunkData.sequence} (${chunkData.wordCount} words): "${chunkData.text.substring(0, 30)}..."`);
+                        }
+                      }
+                    });
+                  });
+                  
+                  audioStream.on('error', (error) => {
+                    console.error(`TTS stream error for ${lang}:`, error);
+                  });
+                }
+              } catch (error) {
+                console.error(`TTS generation error for ${lang}:`, error);
+              }
+            }
+          }
+        }
+      } else if (USE_CONFERENCE_MODE) {
+        // CONFERENCE MODE: Optimized for live conferences with proper deduplication
+        for (const [lang, translatedText] of Object.entries(translations)) {
+          if (!translatedText) continue;
+          
+          // Always display immediately for visual feedback
+          session.listeners.forEach((listener, listenerId) => {
+            if (listener.lang === lang) {
+              const listenerSocket = io.sockets.sockets.get(listenerId);
+              if (listenerSocket) {
+                listenerSocket.emit('translation-update', {
+                  text: translatedText,
+                  language: lang,
+                  isFinal: data.isFinal
+                });
+              }
+            }
+          });
+          
+          // Only generate TTS for FINAL results with complete sentences
+          if (data.isFinal) {
+            const result = conferenceSentenceExtractor.processText(
+              code,
+              lang,
+              translatedText,
+              true
+            );
+            
+            if (result.sentences.length > 0) {
+              console.log(`🎯 [CONFERENCE] Generating TTS for ${result.sentences.length} unique sentences in ${lang}`);
+              
+              for (const sentenceData of result.sentences) {
+                try {
+                  // Get voice preferences
+                  const listenersVoices = new Map();
+                  session.listeners.forEach((listener, listenerId) => {
+                    if (listener.lang === lang) {
+                      listenersVoices.set(listenerId, listener.voice);
+                    }
+                  });
+                  
+                  const voicePrefs = Array.from(listenersVoices.values());
+                  const commonVoice = voicePrefs.every(v => v === voicePrefs[0]) ? voicePrefs[0] : null;
+                  
+                  // Generate TTS with queue management
+                  const audioStream = USE_ENHANCED_TTS 
+                    ? await ttsProvider.generateWithQueueManagement(sentenceData.text, lang, code, commonVoice)
+                    : await ttsProvider.streamSynthesize(sentenceData.text, lang);
+                    
+                  if (audioStream) {
+                    const chunks = [];
+                    audioStream.on('data', chunk => chunks.push(chunk));
+                    audioStream.on('end', () => {
+                      const audioBuffer = Buffer.concat(chunks);
+                      const base64Audio = audioBuffer.toString('base64');
+                      
+                      // Send to listeners
+                      session.listeners.forEach((listener, listenerId) => {
+                        if (listener.lang === lang) {
+                          const listenerSocket = io.sockets.sockets.get(listenerId);
+                          if (listenerSocket) {
+                            listenerSocket.emit('audio-stream', {
+                              audio: base64Audio,
+                              format: 'mp3',
+                              language: lang,
+                              text: sentenceData.text,
+                              sequence: sentenceData.sequence
+                            });
+                            console.log(`🔊 [CONFERENCE] Sent sentence #${sentenceData.sequence}: "${sentenceData.text.substring(0, 40)}..."`);
+                          }
+                        }
+                      });
+                    });
+                    
+                    audioStream.on('error', (error) => {
+                      console.error(`TTS stream error for ${lang}:`, error);
+                    });
+                  }
+                } catch (error) {
+                  console.error(`TTS generation error for ${lang}:`, error);
+                }
+              }
+            }
+          }
+        }
+      } else if (USE_HYBRID_MODE) {
         // HYBRID MODE: Generate TTS for stable sentences across partials
         for (const [lang, translatedText] of Object.entries(translations)) {
           if (!translatedText) continue;
@@ -174,8 +525,22 @@ export function initOptimizedSocket(io) {
                 // Deduplicate against any previously spoken sentences (hybrid or final)
                 streamingSentenceExtractor.registerSpoken(code, lang, sentenceData.text);
 
-                // Generate TTS audio
-                const audioStream = await ttsProvider.streamSynthesize(sentenceData.text, lang);
+                // Get voice preferences for listeners of this language
+                const listenersVoices = new Map();
+                session.listeners.forEach((listener, listenerId) => {
+                  if (listener.lang === lang) {
+                    listenersVoices.set(listenerId, listener.voice);
+                  }
+                });
+                
+                // If all listeners want same voice, use it; otherwise use default
+                const voicePrefs = Array.from(listenersVoices.values());
+                const commonVoice = voicePrefs.every(v => v === voicePrefs[0]) ? voicePrefs[0] : null;
+                
+                // Generate TTS audio with queue management for enhanced provider
+                const audioStream = USE_ENHANCED_TTS 
+                  ? await ttsProvider.generateWithQueueManagement(sentenceData.text, lang, code, commonVoice)
+                  : await ttsProvider.streamSynthesize(sentenceData.text, lang);
                 if (audioStream) {
                   const chunks = [];
                   audioStream.on('data', chunk => chunks.push(chunk));
@@ -226,7 +591,9 @@ export function initOptimizedSocket(io) {
                   // Skip anything already spoken by hybrid
                   streamingSentenceExtractor.registerSpoken(code, lang, sentence);
 
-                  const audioStream = await ttsProvider.streamSynthesize(sentence, lang);
+                  const audioStream = USE_ENHANCED_TTS 
+                    ? await ttsProvider.generateWithQueueManagement(sentence, lang, code)
+                    : await ttsProvider.streamSynthesize(sentence, lang);
                   if (audioStream) {
                     const chunks = [];
                     audioStream.on('data', chunk => chunks.push(chunk));
@@ -397,7 +764,7 @@ export function initOptimizedSocket(io) {
     });
 
     // Handle listener joins
-    const handleListenerJoin = ({ sessionCode, preferredLanguage }) => {
+    const handleListenerJoin = ({ sessionCode, preferredLanguage, voicePreference }) => {
       const code = (sessionCode || '').trim().toUpperCase();
       const session = sessions.get(code);
 
@@ -408,6 +775,7 @@ export function initOptimizedSocket(io) {
 
       session.listeners.set(socket.id, {
         lang: preferredLanguage,
+        voice: voicePreference || null, // Store voice preference
         joinedAt: Date.now()
       });
 
@@ -473,12 +841,46 @@ export function initOptimizedSocket(io) {
             console.log(`   Avg Latency: ${avgLatency.toFixed(2)}ms`);
           }
 
-          // Clean up hybrid extractors if using hybrid mode
-          if (USE_HYBRID_MODE) {
+          // Clean up extractors based on mode
+          if (USE_CONTINUOUS_STREAMING) {
+            const langs = session.targetLangs.length > 0 ? session.targetLangs : getListenerLangs(session);
+            langs.forEach(lang => {
+              continuousStreamProcessor.clearSession(code, lang);
+              webSocketTTS.closeConnection(code, lang);
+            });
+            console.log(`🧹 [STREAMING] Cleaned up streaming for session ${code}`);
+          } else if (USE_NATURAL_LANGUAGE) {
+            const langs = session.targetLangs.length > 0 ? session.targetLangs : getListenerLangs(session);
+            langs.forEach(lang => {
+              naturalLanguageExtractor.clearSession(code, lang);
+            });
+            console.log(`🧹 [NATURAL] Cleaned up extractors for session ${code}`);
+          } else if (USE_ULTRA_LOW_LATENCY) {
+            const langs = session.targetLangs.length > 0 ? session.targetLangs : getListenerLangs(session);
+            langs.forEach(lang => {
+              ultraLowLatencyExtractor.clearSession(code, lang);
+            });
+            console.log(`🧹 [ULTRA] Cleaned up extractors for session ${code}`);
+          } else if (USE_CONFERENCE_MODE) {
+            const langs = session.targetLangs.length > 0 ? session.targetLangs : getListenerLangs(session);
+            langs.forEach(lang => {
+              conferenceSentenceExtractor.clearSession(code, lang);
+            });
+            console.log(`🧹 [CONFERENCE] Cleaned up extractors for session ${code}`);
+          } else if (USE_HYBRID_MODE) {
             session.targetLangs.forEach(lang => {
               hybridSentenceExtractor.clearSession(code, lang);
             });
             console.log(`🧹 [HYBRID] Cleaned up extractors for session ${code}`);
+          }
+          
+          // Clean up TTS queues if using enhanced TTS
+          if (USE_ENHANCED_TTS) {
+            const langs = session.targetLangs.length > 0 ? session.targetLangs : getListenerLangs(session);
+            langs.forEach(lang => {
+              ttsProvider.clearQueue(code, lang);
+            });
+            console.log(`🧹 [TTS] Cleaned up queues for session ${code}`);
           }
 
           io.to(code).emit('speaker-disconnected');
@@ -486,6 +888,56 @@ export function initOptimizedSocket(io) {
         } else if (session.listeners.has(socket.id)) {
           session.listeners.delete(socket.id);
         }
+      }
+    });
+
+    // Get available voices for a language
+    socket.on('get-available-voices', ({ language }) => {
+      const voices = getAvailableVoices(language);
+      socket.emit('available-voices', {
+        language,
+        voices
+      });
+    });
+    
+    // Update voice preference
+    socket.on('update-voice', ({ sessionCode, voicePreference }) => {
+      const code = (sessionCode || '').trim().toUpperCase();
+      const session = sessions.get(code);
+      
+      if (session && session.listeners.has(socket.id)) {
+        const listener = session.listeners.get(socket.id);
+        listener.voice = voicePreference;
+        
+        socket.emit('voice-updated', {
+          voice: voicePreference,
+          success: true
+        });
+        
+        console.log(`🎤 Voice preference updated for listener ${socket.id}: ${voicePreference}`);
+      }
+    });
+    
+    // Get TTS queue status (for monitoring)
+    socket.on('get-queue-status', ({ sessionCode, language }) => {
+      const code = (sessionCode || '').trim().toUpperCase();
+      
+      if (USE_ENHANCED_TTS) {
+        const status = ttsProvider.getQueueStatus(code, language);
+        socket.emit('queue-status', {
+          sessionCode: code,
+          language,
+          ...status,
+          adaptiveSpeed: status.metrics?.currentSpeed || 1.0
+        });
+      } else {
+        socket.emit('queue-status', {
+          sessionCode: code,
+          language,
+          depth: 0,
+          processing: false,
+          adaptiveSpeed: 1.0
+        });
       }
     });
 

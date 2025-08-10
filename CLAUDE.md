@@ -26,11 +26,17 @@ npm install
 # Start development server (port 8080)
 npm run dev
 
+# Start streaming server (alternative entry point)
+npm run start:streaming
+
 # Test Azure API keys configuration
 npm run test:keys
 
 # Test audio playback
 npm run test:audio
+
+# Setup project (install + instructions)
+npm run setup
 ```
 
 ## Required Environment Configuration
@@ -43,16 +49,25 @@ TRANSLATOR_KEY=<Azure Translator key>
 TRANSLATOR_REGION=<Azure region>
 ```
 
+Optional configuration:
+```
+TRANSLATOR_ENDPOINT=https://api.cognitive.microsofttranslator.com
+REDIS_URL=redis://localhost:6379  # For translation caching
+PORT=8080  # Server port
+```
+
 ## Key Components & Their Responsibilities
 
 ### Server Components
-- `server/index.js`: Express server entry point, route configuration
-- `server/websocket.js`: WebSocket session management, translation orchestration
+- `server/index.js`: Express server entry point, route configuration, SDK proxy
+- `server/websocket.js`: WebSocket session management, translation orchestration, hybrid/original mode switching
 - `server/streaming-sentence-extractor.js`: **Critical** - Deduplication logic to prevent audio repetition
+- `server/hybrid-sentence-extractor.js`: Stability-based sentence extraction for low-latency hybrid mode
 - `server/text-translator.js`: Azure Translator API integration for multi-language translation
 - `server/streaming-tts.js`: Text-to-speech synthesis using Azure TTS
 - `server/token-route.js`: Azure Speech SDK token generation endpoint
 - `server/performance-monitor.js`: Metrics tracking and monitoring
+- `server/punctuation-helper.js`: Intelligent punctuation for better sentence extraction
 
 ### Client Interfaces
 - `public/speaker-streaming.html`: Optimized speaker interface with continuous STT
@@ -86,9 +101,11 @@ TRANSLATOR_REGION=<Azure region>
    - End-to-end audio latency: <500ms
    - Deduplication rate: 100%
 
-4. **Language Support**: Default voices configured for en-US, es-ES, fr-CA, de-DE, zh-CN, ja-JP
+5. **Language Support**: Default voices configured for en-US, es-ES, fr-CA, de-DE, zh-CN, ja-JP
 
-5. **Punctuation Helper**: Intelligently adds punctuation to improve sentence extraction quality
+6. **Punctuation Helper**: Intelligently adds punctuation to improve sentence extraction quality
+
+7. **Adaptive Thresholds**: Hybrid mode adjusts stability thresholds based on continuous speech detection (3+ seconds of rapid partials triggers phrase mode)
 
 ## Testing Scenarios
 
@@ -98,6 +115,8 @@ When testing changes, verify:
 3. Multiple sentences are played separately
 4. Long pauses don't cause repetition
 5. Safari compatibility (use full URLs with http://)
+6. Continuous speech handling (conference mode)
+7. Language switching mid-session
 
 ## Monitoring & Debugging
 
@@ -105,6 +124,7 @@ When testing changes, verify:
 - Health check endpoint at `/healthz`
 - Extensive console logging with emoji indicators for different stages
 - Session tracking in `websocket.js` using Map structures
+- Speech config endpoint at `/speech-config` for client SDK initialization
 
 ## Common Issues & Solutions
 
@@ -112,3 +132,4 @@ When testing changes, verify:
 2. **Audio Not Playing**: Click page to unlock audio context
 3. **High Latency**: Check Azure region configuration
 4. **Sentence Repetition**: Ensure only FINAL results trigger TTS
+5. **SDK Loading Issues**: Server proxies Azure Speech SDK to avoid CDN/extension blocking

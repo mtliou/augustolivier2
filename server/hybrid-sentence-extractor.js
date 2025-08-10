@@ -11,9 +11,9 @@ import crypto from 'crypto';
 
 export class HybridSentenceExtractor {
     constructor() {
-        // Default configuration
-        this.DEFAULT_THRESHOLD = 2;     // Appearances needed for stability
-        this.DEFAULT_TIME_MS = 600;     // Time window for stability
+        // Default configuration - optimized for low-latency conferences
+        this.DEFAULT_THRESHOLD = 1;     // Reduced from 2 - faster TTS generation
+        this.DEFAULT_TIME_MS = 200;     // Reduced from 600ms - much faster response
         this.CLEANUP_THRESHOLD_MS = 2000; // Remove old sentences after this time
 
         // Tracking structures per session
